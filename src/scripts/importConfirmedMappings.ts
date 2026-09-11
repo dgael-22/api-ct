@@ -9,7 +9,10 @@
  * mayúscula/minúscula):
  *
  *   shopifyVariantId, shopifySku, ctSku, ctProductId, partNumber,
- *   inventoryItemId, locationId, status, confirmedBy
+ *   inventoryItemId, locationId, status, confirmedBy, reason
+ *
+ * Las filas con la columna ctSku vacía se cuentan como "sin llenar" y no
+ * entran: son las que todavía esperan el código de CT.
  *
  * REGLA: una fila entra como "confirmed" SÓLO si el CSV lo dice explícitamente
  * y trae confirmedBy. Todo lo demás entra como "pending". El script no
@@ -53,7 +56,10 @@ async function principal(): Promise<void> {
     const shopifySku = (fila["shopifysku"] ?? "").trim();
     const ctSku = (fila["ctsku"] ?? "").trim();
 
-    if (!variantId || !shopifySku || !ctSku) { omitidos++; continue; }
+    // El SKU de Shopify puede venir vacío: en la tienda hay artículos de
+    // tecnología dados de alta sin SKU. Lo que no puede faltar es la variante
+    // y la clave de CT — sin esas dos no hay mapeo que guardar.
+    if (!variantId || !ctSku) { omitidos++; continue; }
 
     const confirmedBy = (fila["confirmedby"] ?? "").trim();
     const pedido = (fila["status"] ?? "").trim().toLowerCase();
@@ -82,7 +88,14 @@ async function principal(): Promise<void> {
   console.log(`Creados:       ${creados}`);
   console.log(`Actualizados:  ${actualizados}`);
   console.log(`Confirmados:   ${confirmados}`);
-  console.log(`Omitidos:      ${omitidos} (les faltaba variantId, SKU o clave CT)`);
+  console.log(`Sin llenar:    ${omitidos} (sin variante o sin clave de CT)`);
+  if (confirmados === 0 && creados + actualizados > 0) {
+    console.log(
+      "\nNinguna fila quedó confirmada. Para confirmar hay que poner\n" +
+      "status=confirmed y confirmedBy=<tu nombre> en el CSV. Mientras estén\n" +
+      "en pending, el middleware no las usa para vender ni sincronizar."
+    );
+  }
 }
 
 principal()

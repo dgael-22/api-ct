@@ -9,6 +9,19 @@
  *   · leer la variante y su InventoryItem            (RF-01, RF-02)
  *   · fijar la cantidad disponible en una Location    (RF-02, RF-07)
  *   · dejar visible en la orden la referencia de CT   (RF-06)
+ *
+ * SOBRE EL TOKEN — esto cambió en Shopify y es la razón de la mitad de este
+ * archivo. Ya no se pueden crear apps personalizadas desde el admin de la
+ * tienda, y las apps del Dev Dashboard NO dan un token permanente: se obtiene
+ * por "client credentials" y **expira en 24 horas**.
+ *
+ *   POST https://{tienda}/admin/oauth/access_token
+ *   grant_type=client_credentials&client_id=...&client_secret=...
+ *   -> { access_token, scope, expires_in }
+ *
+ * Por eso el token se pide solo y se renueva antes de vencer. Si alguien tiene
+ * todavía un token permanente de una app vieja (`shpat_...`), se usa ése y no
+ * se pide nada.
  */
 import "@shopify/shopify-api/adapters/node";
 import { ApiVersion, Session, shopifyApi } from "@shopify/shopify-api";
@@ -33,13 +46,76 @@ export class ErrorShopify extends Error {
   }
 }
 
+interface RespuestaToken {
+  access_token: string;
+  scope?: string;
+  expires_in?: number;
+}
+
 export class ShopifyClient {
   private clienteGraphql: InstanceType<
     ReturnType<typeof shopifyApi>["clients"]["Graphql"]
   > | null = null;
 
+  private token: string | null = null;
+  private tokenExpiraEn = 0;
+
+  /**
+   * Devuelve un token vigente. Si hay uno fijo en la configuración se usa tal
+   * cual; si no, se pide por client credentials y se renueva un minuto antes
+   * de vencer.
+   */
+  private async obtenerToken(): Promise<string> {
+    if (env.shopify.tokenFijo) return env.shopify.tokenFijo;
+    if (this.token && Date.now() < this.tokenExpiraEn) return this.token;
+
+    const cuerpo = new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: env.shopify.clientId,
+      client_secret: env.shopify.clientSecret,
+    });
+
+    const respuesta = await fetch(
+      `https://${env.shopify.dominio}/admin/oauth/access_token`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: cuerpo,
+      }
+    );
+
+    const texto = await respuesta.text();
+    if (!respuesta.ok) {
+      throw new ErrorShopify(
+        `Shopify no emitió el token (${respuesta.status}). ` +
+          `Revisa SHOPIFY_CLIENT_ID, SHOPIFY_CLIENT_SECRET y que la app esté ` +
+          `instalada en ${env.shopify.dominio}.`,
+        texto.slice(0, 300)
+      );
+    }
+
+    let datos: RespuestaToken;
+    try {
+      datos = JSON.parse(texto) as RespuestaToken;
+    } catch {
+      throw new ErrorShopify("Shopify devolvió algo que no es JSON al pedir el token", texto.slice(0, 200));
+    }
+    if (!datos.access_token) {
+      throw new ErrorShopify("Shopify no devolvió access_token", datos);
+    }
+
+    this.token = datos.access_token;
+    // Un minuto de colchón: nunca usar un token que está por vencer.
+    const segundos = datos.expires_in ?? 86_399;
+    this.tokenExpiraEn = Date.now() + Math.max(0, segundos - 60) * 1000;
+    // El cliente cacheado trae el token viejo: se descarta.
+    this.clienteGraphql = null;
+    return this.token;
+  }
+
   /** Se construye a demanda: así la API arranca sin credenciales. */
-  private graphql() {
+  private async graphql() {
+    const token = await this.obtenerToken();
     if (this.clienteGraphql) return this.clienteGraphql;
 
     const shopify = shopifyApi({
@@ -51,7 +127,7 @@ export class ShopifyClient {
       isEmbeddedApp: false,
       // App propia de la tienda: el token de Admin API va en la configuración.
       isCustomStoreApp: true,
-      adminApiAccessToken: env.shopify.accessToken,
+      adminApiAccessToken: token,
     });
 
     const sesion: Session = shopify.session.customAppSession(env.shopify.dominio);
@@ -60,7 +136,8 @@ export class ShopifyClient {
   }
 
   private async consultar<T>(operacion: string, variables?: Record<string, unknown>): Promise<T> {
-    const respuesta = await this.graphql().request<T>(operacion, { variables });
+    const cliente = await this.graphql();
+    const respuesta = await cliente.request<T>(operacion, { variables });
     if (respuesta.errors) {
       throw new ErrorShopify("Shopify devolvió errores de GraphQL", respuesta.errors);
     }
@@ -68,6 +145,25 @@ export class ShopifyClient {
       throw new ErrorShopify("Shopify no devolvió datos", respuesta);
     }
     return respuesta.data as T;
+  }
+
+  // -------------------------------------------------------------- locations
+
+  /**
+   * Locations de la tienda. De aquí sale el SHOPIFY_LOCATION_ID, y sirve como
+   * primera prueba de que el token y los scopes funcionan.
+   */
+  async listarLocations(): Promise<{ id: string; name: string; isActive: boolean }[]> {
+    const datos = await this.consultar<{
+      locations: { edges: { node: { id: string; name: string; isActive: boolean } }[] };
+    }>(
+      `query locations {
+         locations(first: 20) {
+           edges { node { id name isActive } }
+         }
+       }`
+    );
+    return datos.locations.edges.map((e) => e.node);
   }
 
   // -------------------------------------------------------------- variantes

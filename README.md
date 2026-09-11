@@ -154,6 +154,45 @@ En local, `ngrok` publica el endpoint para que Shopify lo alcance.
 
 ---
 
+## Probar el circuito completo sin CT
+
+CT tarda en autorizar la integración, y esperar a eso dejaría el flujo entero
+sin probar hasta el último día. Para evitarlo hay un CT de mentiras:
+
+```bash
+CT_MODO=simulado npm run dev
+```
+
+Responde con las mismas formas que documenta CT, así que **todo lo demás es
+real**: el webhook firmado, la traducción de líneas, la persistencia, la
+confirmación, el metafield en la orden y el inventario de vuelta en Shopify.
+Cuando lleguen las credenciales, se cambia `CT_MODO=real` y lo mismo apunta al
+sandbox.
+
+Tres cosas lo hacen útil y no un simple `return {}`:
+
+- **El stock es determinista.** La misma clave siempre da la misma cantidad, así
+  que las pruebas son repetibles.
+- **Un pedido confirmado descuenta stock.** Por eso la resincronización (RF-07)
+  muestra un cambio de verdad en vez de repetir el mismo número.
+- **Los casos feos se fuerzan a voluntad**, que es justo lo que con CT real no
+  se puede:
+
+| `CT_SIMULADO_ESCENARIO` | Qué provoca | Estado esperado |
+|---|---|---|
+| `ok` (por omisión) | acepta y confirma | `accepted` |
+| `sin_stock` | existencias en 0 | `rejected` |
+| `rechazo` | CT devuelve errores | `rejected` |
+| `caida` | la conexión se corta | `uncertain` |
+
+En modo simulado, `/health` lo dice (`ct.simulado: true`), el arranque lo
+anuncia con un recuadro y las credenciales de CT dejan de aparecer como
+faltantes, porque no se usan.
+
+**Nunca lo dejes encendido contra la tienda real**: lo que "vende" no existe.
+
+---
+
 ## Probarla con Bruno o Postman
 
 Nivel "manual" de la sección 9 del ETS. No hay suite automatizada en el repo:

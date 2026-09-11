@@ -8,16 +8,16 @@
  *   npm run sync:inventory -- 5      (sólo los primeros 5 mapeos)
  */
 import { inicializarBd, repositorios } from "../data-source";
-import { CtClient } from "../services/CtClient";
 import { InventorySyncService } from "../services/InventorySyncService";
 import { ShopifyClient } from "../services/ShopifyClient";
+import { crearClienteCt } from "../services/ctFactory";
 
 const limite = process.argv[2] ? Number(process.argv[2]) : undefined;
 
 async function principal(): Promise<void> {
   await inicializarBd();
   const { productos } = repositorios();
-  const servicio = new InventorySyncService(new CtClient(), new ShopifyClient(), productos);
+  const servicio = new InventorySyncService(crearClienteCt(), new ShopifyClient(), productos);
 
   const resultados = await servicio.sincronizarConfirmados(limite);
   if (resultados.length === 0) {

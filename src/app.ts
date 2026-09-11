@@ -21,10 +21,10 @@ import { env, estaDefinida, FaltaConfiguracion } from "./config/env";
 import { esPostgres, inicializarBd, repositorios } from "./data-source";
 import { iniciarConfirmacionAutomatica } from "./jobs/confirmScheduler";
 import { crearRutasWebhook } from "./routes/shopifyWebhooks";
-import { CtClient } from "./services/CtClient";
 import { InventorySyncService } from "./services/InventorySyncService";
 import { OrderService } from "./services/OrderService";
 import { ShopifyClient } from "./services/ShopifyClient";
+import { advertirSiSimulado, crearClienteCt } from "./services/ctFactory";
 
 export const app = express();
 
@@ -38,11 +38,21 @@ app.get("/health", (_peticion: Request, respuesta: Response) => {
   const configuracion = {
     shopify: {
       dominio: estaDefinida("SHOPIFY_SHOP_DOMAIN"),
-      accessToken: estaDefinida("SHOPIFY_ACCESS_TOKEN"),
+      // Dos caminos válidos: token fijo de una app vieja, o client
+      // credentials del Dev Dashboard (token de 24 h que se renueva solo).
+      credenciales:
+        estaDefinida("SHOPIFY_ACCESS_TOKEN") ||
+        (estaDefinida("SHOPIFY_CLIENT_ID") && estaDefinida("SHOPIFY_CLIENT_SECRET")),
+      tipoDeToken: estaDefinida("SHOPIFY_ACCESS_TOKEN")
+        ? "fijo (app del admin)"
+        : "client credentials (24 h)",
       webhookSecret: estaDefinida("SHOPIFY_WEBHOOK_SECRET"),
       locationId: estaDefinida("SHOPIFY_LOCATION_ID"),
     },
     ct: {
+      modo: env.ct.modo,
+      simulado: env.ct.modo === "simulado",
+      escenarioSimulado: env.ct.modo === "simulado" ? env.ct.escenarioSimulado : undefined,
       baseUrl: env.ct.baseUrl,
       credenciales:
         estaDefinida("CT_ACCESS_TOKEN") ||
@@ -54,10 +64,18 @@ app.get("/health", (_peticion: Request, respuesta: Response) => {
     confirmacionAutomaticaMin: env.app.minutosConfirmacion,
   };
 
-  const faltantes = [
-    "SHOPIFY_SHOP_DOMAIN", "SHOPIFY_ACCESS_TOKEN", "SHOPIFY_WEBHOOK_SECRET",
-    "SHOPIFY_LOCATION_ID", "CT_EMAIL", "CT_CLIENTE", "CT_RFC", "CT_ALMACEN",
-  ].filter((v) => !estaDefinida(v));
+  // En modo simulado las credenciales de CT no hacen falta: no se usan.
+  const requeridas = env.ct.modo === "simulado"
+    ? ["SHOPIFY_SHOP_DOMAIN", "SHOPIFY_WEBHOOK_SECRET", "SHOPIFY_LOCATION_ID",
+       "CT_ALMACEN"]
+    : ["SHOPIFY_SHOP_DOMAIN", "SHOPIFY_WEBHOOK_SECRET", "SHOPIFY_LOCATION_ID",
+       "CT_EMAIL", "CT_CLIENTE", "CT_RFC", "CT_ALMACEN"];
+  const faltantes = requeridas.filter((v) => !estaDefinida(v));
+
+  // El token de Shopify se resuelve por cualquiera de los dos caminos.
+  if (!configuracion.shopify.credenciales) {
+    faltantes.push("SHOPIFY_CLIENT_ID + SHOPIFY_CLIENT_SECRET (o SHOPIFY_ACCESS_TOKEN)");
+  }
 
   respuesta.json({
     ok: true,
@@ -136,7 +154,7 @@ app.post("/mappings", async (peticion: Request, respuesta: Response) => {
 app.post("/inventory/sync", async (peticion: Request, respuesta: Response, siguiente: NextFunction) => {
   try {
     const { productos } = repositorios();
-    const servicio = new InventorySyncService(new CtClient(), new ShopifyClient(), productos);
+    const servicio = new InventorySyncService(crearClienteCt(), new ShopifyClient(), productos);
     const limite = peticion.body?.limit ? Number(peticion.body.limit) : undefined;
     const resultados = await servicio.sincronizarConfirmados(limite);
     respuesta.json({
@@ -168,7 +186,7 @@ app.get("/orders", async (peticion: Request, respuesta: Response) => {
 app.post("/orders/confirm", async (_peticion: Request, respuesta: Response, siguiente: NextFunction) => {
   try {
     const { ordenes, productos } = repositorios();
-    const ct = new CtClient();
+    const ct = crearClienteCt();
     const shopify = new ShopifyClient();
     const servicio = new OrderService(
       ct, shopify, ordenes, productos,
@@ -219,6 +237,7 @@ export async function arrancar(): Promise<void> {
       console.log(`Webhook para Shopify:  ${publica}/webhooks/shopify/orders-paid`);
     }
     iniciarConfirmacionAutomatica();
+    advertirSiSimulado();
   });
 }
 

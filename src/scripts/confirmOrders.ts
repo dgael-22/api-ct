@@ -13,15 +13,15 @@
  * "cd /ruta && npm run confirm:orders").
  */
 import { inicializarBd, repositorios } from "../data-source";
-import { CtClient } from "../services/CtClient";
 import { InventorySyncService } from "../services/InventorySyncService";
 import { OrderService } from "../services/OrderService";
 import { ShopifyClient } from "../services/ShopifyClient";
+import { crearClienteCt } from "../services/ctFactory";
 
 async function principal(): Promise<void> {
   await inicializarBd();
   const { ordenes, productos } = repositorios();
-  const ct = new CtClient();
+  const ct = crearClienteCt();
   const shopify = new ShopifyClient();
   const servicio = new OrderService(
     ct, shopify, ordenes, productos,

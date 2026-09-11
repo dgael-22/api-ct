@@ -19,10 +19,10 @@ import crypto from "node:crypto";
 import express, { Request, Response, Router } from "express";
 import { env } from "../config/env";
 import { repositorios } from "../data-source";
-import { CtClient } from "../services/CtClient";
 import { InventorySyncService } from "../services/InventorySyncService";
 import { LineaOrden, OrdenShopify, OrderService } from "../services/OrderService";
 import { ShopifyClient } from "../services/ShopifyClient";
+import { crearClienteCt } from "../services/ctFactory";
 
 /** Compara la firma del webhook en tiempo constante. */
 export function firmaValida(cuerpoCrudo: Buffer, firmaRecibida: string, secreto: string): boolean {
@@ -128,7 +128,7 @@ export function crearRutasWebhook(): Router {
 
 async function procesarEnSegundoPlano(orden: OrdenShopify): Promise<void> {
   const { ordenes, productos } = repositorios();
-  const ct = new CtClient();
+  const ct = crearClienteCt();
   const shopify = new ShopifyClient();
   const inventario = new InventorySyncService(ct, shopify, productos);
   const servicio = new OrderService(ct, shopify, ordenes, productos, inventario);

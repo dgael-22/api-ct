@@ -78,6 +78,15 @@ export const env = {
     get baseUrl(): string {
       return opcional("CT_BASE_URL", "https://api.ctonline.mx").replace(/\/$/, "");
     },
+    /**
+     * "real" habla con CT; "simulado" usa CtSimulado, para probar el circuito
+     * completo sin esperar a que CT autorice la integración.
+     */
+    get modo(): string { return opcional("CT_MODO", "real").toLowerCase(); },
+    /** Sólo en modo simulado: ok | sin_stock | rechazo | caida */
+    get escenarioSimulado(): string {
+      return opcional("CT_SIMULADO_ESCENARIO", "ok").toLowerCase();
+    },
     /** Token ya emitido. Si no está, CtClient lo pide con email/cliente/rfc. */
     get accessToken(): string { return opcional("CT_ACCESS_TOKEN", ""); },
     get email(): string { return requerida("CT_EMAIL"); },

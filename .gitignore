@@ -3,8 +3,13 @@ dist/
 .env
 .env.*
 !.env.example
+# La plantilla que se copia a .env: no tiene por qué viajar al repo.
+env-para-copiar.txt
 data/*.sqlite
 data/*.sqlite-journal
+# Exportaciones del catálogo: se regeneran con npm run shopify:catalogo.
+# Son datos de la tienda, no código.
+data/*.csv
 *.log
 *.zip
 .DS_Store

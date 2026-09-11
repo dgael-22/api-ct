@@ -112,7 +112,30 @@ interface OpcionesPeticion {
   timeoutMs?: number;
 }
 
-export class CtClient {
+/**
+ * Lo que los servicios necesitan de CT. La implementación real (CtClient) y la
+ * simulada (CtSimulado) cumplen este mismo contrato, así que el resto del
+ * middleware no sabe —ni debe saber— contra cuál está hablando.
+ */
+export interface ClienteCt {
+  obtenerToken(forzar?: boolean): Promise<string>;
+  existenciaPorAlmacen(codigo: string): Promise<ExistenciaPorAlmacen>;
+  existenciaTotal(codigo: string): Promise<ExistenciaPorAlmacen>;
+  detalle(codigo: string, almacen: string): Promise<DetalleExistencia[]>;
+  catalogoCompleto(): Promise<unknown[]>;
+  crearPedido(pedido: PedidoCt): Promise<RespuestaPedidoCt>;
+  confirmarPedido(folio: string): Promise<RespuestaConfirmacionCt>;
+  estatusPedido(folio: string): Promise<EstatusPedidoCt[]>;
+  listarPedidos(): Promise<unknown>;
+  tipoCambio(): Promise<unknown>;
+  /** true cuando NO se está hablando con CT de verdad. */
+  readonly simulado: boolean;
+}
+
+export class CtClient implements ClienteCt {
+  /** Este sí habla con CT. */
+  readonly simulado = false;
+
   private token: string | null = null;
   private tokenExpiraEn = 0;
 

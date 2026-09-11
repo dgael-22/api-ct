@@ -15,7 +15,9 @@
     "inspect:csv": "tsx src/scripts/inspectCsv.ts",
     "import:mappings": "tsx src/scripts/importConfirmedMappings.ts",
     "sync:inventory": "tsx src/scripts/syncInventory.ts",
-    "confirm:orders": "tsx src/scripts/confirmOrders.ts"
+    "confirm:orders": "tsx src/scripts/confirmOrders.ts",
+    "shopify:locations": "tsx src/scripts/shopifyLocations.ts",
+    "shopify:catalogo": "tsx src/scripts/shopifyCatalogo.ts"
   },
   "dependencies": {
     "@shopify/shopify-api": "^11.6.0",

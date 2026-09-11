@@ -15,7 +15,7 @@ import { Repository } from "typeorm";
 import { env } from "../config/env";
 import { OrderMapping } from "../entities/OrderMapping";
 import { ProductMapping } from "../entities/ProductMapping";
-import { CtClient, EnvioCt, ErrorCt, LineaPedidoCt, PedidoCt } from "./CtClient";
+import { ClienteCt, EnvioCt, ErrorCt, LineaPedidoCt, PedidoCt } from "./CtClient";
 import { InventorySyncService } from "./InventorySyncService";
 import { ShopifyClient } from "./ShopifyClient";
 
@@ -61,7 +61,7 @@ export interface ResultadoOrden {
 
 export class OrderService {
   constructor(
-    private readonly ct: CtClient,
+    private readonly ct: ClienteCt,
     private readonly shopify: ShopifyClient,
     private readonly ordenes: Repository<OrderMapping>,
     private readonly mapeos: Repository<ProductMapping>,

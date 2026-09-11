@@ -10,7 +10,7 @@
 import { Repository } from "typeorm";
 import { env } from "../config/env";
 import { ProductMapping } from "../entities/ProductMapping";
-import { CtClient } from "./CtClient";
+import { ClienteCt } from "./CtClient";
 import { ShopifyClient } from "./ShopifyClient";
 
 /**
@@ -33,7 +33,7 @@ export interface ResultadoSincronizacion {
 
 export class InventorySyncService {
   constructor(
-    private readonly ct: CtClient,
+    private readonly ct: ClienteCt,
     private readonly shopify: ShopifyClient,
     private readonly mapeos: Repository<ProductMapping>
   ) {}

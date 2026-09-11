@@ -17,10 +17,10 @@
  */
 import { env } from "../config/env";
 import { repositorios } from "../data-source";
-import { CtClient } from "../services/CtClient";
 import { InventorySyncService } from "../services/InventorySyncService";
 import { OrderService } from "../services/OrderService";
 import { ShopifyClient } from "../services/ShopifyClient";
+import { crearClienteCt } from "../services/ctFactory";
 
 let temporizador: NodeJS.Timeout | null = null;
 let corriendo = false;
@@ -31,7 +31,7 @@ async function unaPasada(): Promise<void> {
   corriendo = true;
   try {
     const { ordenes, productos } = repositorios();
-    const ct = new CtClient();
+    const ct = crearClienteCt();
     const shopify = new ShopifyClient();
     const servicio = new OrderService(
       ct, shopify, ordenes, productos,
