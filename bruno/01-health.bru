@@ -1,0 +1,20 @@
+meta {
+  name: 01 Health
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/health
+}
+
+docs {
+  Debe responder 200 aunque no haya .env.
+  `faltantes` lista las variables que hacen falta y `listoParaOperar` dice si
+  ya se puede operar de verdad.
+}
+
+assert {
+  res.status: eq 200
+  res.body.ok: eq true
+}

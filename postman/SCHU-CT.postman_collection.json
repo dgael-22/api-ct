@@ -1,0 +1,503 @@
+{
+  "info": {
+    "name": "SCHU – CT Middleware",
+    "description": "Pruebas manuales del middleware SCHU – Shopify – CT Online.\n\nCorre las peticiones EN ORDEN: las de mapping preparan el dato que usa el webhook.\n\nLos niveles 1 a 4 no necesitan credenciales de CT ni de Shopify. El webhook sí necesita SHOPIFY_WEBHOOK_SECRET en el .env, igual al del environment.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000"
+    }
+  ],
+  "item": [
+    {
+      "name": "1 · Arranca sin nada",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "200 aunque no haya .env. `faltantes` dice qué variables llenar."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "pm.test('esta vivo', () => pm.expect(d.ok).to.be.true);",
+                  "console.log('faltantes:', d.faltantes.join(', ') || '(ninguna)');"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2 · Mappings (RF-01)",
+      "item": [
+        {
+          "name": "Alta (pending)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/mappings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "mappings"
+              ]
+            },
+            "description": "Entra como pending. Nada se confirma solo.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shopifyVariantId\": \"{{variant_id}}\",\n  \"shopifySku\": \"{{shopify_sku}}\",\n  \"ctSku\": \"{{ct_sku}}\",\n  \"partNumber\": \"ABC-16GB\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 o 200', () => pm.expect([200,201]).to.include(pm.response.code));",
+                  "pm.test('queda pending', () => pm.expect(pm.response.json().status).to.eql('pending'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Confirmar SIN responsable (debe fallar)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/mappings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "mappings"
+              ]
+            },
+            "description": "Sin confirmedBy la API rechaza. Si esto diera 200, el candado no sirve.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shopifyVariantId\": \"{{variant_id}}\",\n  \"shopifySku\": \"{{shopify_sku}}\",\n  \"ctSku\": \"{{ct_sku}}\",\n  \"status\": \"confirmed\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('rechaza con 400', () => pm.response.to.have.status(400));",
+                  "pm.test('dice por que', () => pm.expect(pm.response.json().error).to.eql('confirmacion_sin_responsable'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Confirmar",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/mappings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "mappings"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shopifyVariantId\": \"{{variant_id}}\",\n  \"shopifySku\": \"{{shopify_sku}}\",\n  \"ctSku\": \"{{ct_sku}}\",\n  \"partNumber\": \"ABC-16GB\",\n  \"status\": \"confirmed\",\n  \"confirmedBy\": \"diego\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('queda confirmed', () => pm.expect(pm.response.json().status).to.eql('confirmed'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar confirmados",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/mappings?status=confirmed",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "mappings"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "confirmed"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3 · Detenciones sin credenciales",
+      "item": [
+        {
+          "name": "Inventory sync",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/inventory/sync",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "inventory",
+                "sync"
+              ]
+            },
+            "description": "Sin credenciales de CT: 503 diciendo QUÉ variable falta.\nCon el .env completo: resultado por producto.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"limit\": 5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 503) {",
+                  "  const d = pm.response.json();",
+                  "  pm.test('dice la variable que falta', () => pm.expect(d.variable).to.be.a('string'));",
+                  "  console.log('falta:', d.variable);",
+                  "} else {",
+                  "  pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Orden inexistente",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/orders/999999999",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "orders",
+                "999999999"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('orden_no_registrada', () => pm.expect(pm.response.json().error).to.eql('orden_no_registrada'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4 · Webhook (RF-03)",
+      "item": [
+        {
+          "name": "Firma invalida",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Shopify-Hmac-Sha256",
+                "value": "basura"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/webhooks/shopify/orders-paid",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "webhooks",
+                "shopify",
+                "orders-paid"
+              ]
+            },
+            "description": "Firma que no coincide: 401. Otra respuesta aquí es un agujero.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"id\":1}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 401', () => pm.response.to.have.status(401));",
+                  "pm.test('firma_invalida', () => pm.expect(pm.response.json().error).to.eql('firma_invalida'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Firma valida",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/webhooks/shopify/orders-paid",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "webhooks",
+                "shopify",
+                "orders-paid"
+              ]
+            },
+            "description": "Requiere SHOPIFY_WEBHOOK_SECRET en el .env, igual al del environment.\n\nDebe responder 200 de inmediato, sin esperar a CT.\nMándalo dos veces: externalReference no cambia (idempotencia).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"id\":{{order_id}},\"name\":\"#1054\",\"currency\":\"MXN\",\"line_items\":[{\"sku\":\"{{shopify_sku}}\",\"variant_id\":{{variant_id}},\"quantity\":1,\"price\":\"1099.00\"}]}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// La firma va sobre los MISMOS bytes que se envían, ya con las variables",
+                  "// sustituidas. CryptoJS viene incluido en Postman, no hay que instalar nada.",
+                  "const secreto = pm.environment.get('webhook_secret');",
+                  "const cuerpo = pm.request.body.raw",
+                  "  .replace(/{{order_id}}/g, pm.environment.get('order_id'))",
+                  "  .replace(/{{shopify_sku}}/g, pm.environment.get('shopify_sku'))",
+                  "  .replace(/{{variant_id}}/g, pm.environment.get('variant_id'));",
+                  "",
+                  "const firma = CryptoJS.HmacSHA256(cuerpo, secreto).toString(CryptoJS.enc.Base64);",
+                  "pm.request.headers.upsert({ key: 'X-Shopify-Hmac-Sha256', value: firma });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('acusa recibo', () => pm.expect(pm.response.json().recibido).to.be.true);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Estado de la orden",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/orders/{{order_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "orders",
+                "{{order_id}}"
+              ]
+            },
+            "description": "received = falta configurar CT · sent = creada en CT, sin confirmar\naccepted = en firme · rejected = CT la rechazó\nuncertain = NO reintentar, verificar en CT · expired = CT la canceló"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "console.log('status:', d.status, '| ref:', d.externalReference, '| CT:', d.ctOrderId);",
+                  "pm.test('la referencia es estable', () => pm.expect(d.externalReference).to.be.a('number'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5 · Confirmacion del pedido",
+      "item": [
+        {
+          "name": "Confirmar pendientes",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/orders/confirm",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "orders",
+                "confirm"
+              ]
+            },
+            "description": "Crear el pedido no basta: CT cancela solo lo que no se confirma\nen 48 h. Devuelve confirmados/fallidos/vencidos y avisa de los\nque están a menos de 6 h de vencer.\n\nIgual por CLI: npm run confirm:orders",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "console.log('confirmados:', d.confirmados, '| vencidos:', d.vencidos);",
+                  "if (d.porVencer && d.porVencer.length) { console.warn('POR VENCER:', d.porVencer.join(' | ')); }"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

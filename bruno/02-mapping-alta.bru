@@ -1,0 +1,28 @@
+meta {
+  name: 02 Mapping - alta (pending)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/mappings
+  body: json
+}
+
+body:json {
+  {
+    "shopifyVariantId": "{{variant_id}}",
+    "shopifySku": "{{shopify_sku}}",
+    "ctSku": "{{ct_sku}}",
+    "partNumber": "ABC-16GB"
+  }
+}
+
+docs {
+  Alta del mapping. Entra como "pending": nada se confirma solo.
+  201 la primera vez, 200 si ya existía.
+}
+
+assert {
+  res.body.status: eq pending
+}

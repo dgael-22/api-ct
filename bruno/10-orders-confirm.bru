@@ -1,0 +1,28 @@
+meta {
+  name: 10 Orders - confirmar pendientes
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{base_url}}/orders/confirm
+  body: json
+}
+
+body:json {
+  {}
+}
+
+docs {
+  Segundo paso del pedido de CT. Crear el pedido NO basta: CT cancela por su
+  cuenta lo que no se confirma dentro de su ventana de 48 h.
+
+  Devuelve confirmados / fallidos / vencidos y, si algo está a menos de 6 h de
+  vencer, lo lista en `porVencer` para revisarlo a mano.
+
+  Lo mismo por línea de comandos: npm run confirm:orders
+}
+
+assert {
+  res.status: eq 200
+}

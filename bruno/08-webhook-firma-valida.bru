@@ -1,0 +1,66 @@
+meta {
+  name: 08 Webhook - firma valida (200)
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{base_url}}/webhooks/shopify/orders-paid
+  body: text
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:text {
+  el script de pre-request reemplaza este cuerpo
+}
+
+script:pre-request {
+  // El cuerpo se ARMA aquí y se manda con req.setBody, en vez de escribirlo
+  // arriba con {{variables}}. La razón: la firma tiene que calcularse sobre
+  // los mismos bytes exactos que salen, y así no dependemos de en qué momento
+  // Bruno sustituye las variables.
+  const crypto = require("crypto");
+
+  const orden = {
+    id: Number(bru.getEnvVar("order_id")),
+    name: "#1054",
+    currency: "MXN",
+    line_items: [
+      {
+        sku: bru.getEnvVar("shopify_sku"),
+        variant_id: Number(bru.getEnvVar("variant_id")),
+        quantity: 1,
+        price: "1099.00",
+      },
+    ],
+  };
+
+  const cuerpo = JSON.stringify(orden);
+  req.setBody(cuerpo);
+
+  const firma = crypto
+    .createHmac("sha256", bru.getEnvVar("webhook_secret"))
+    .update(cuerpo, "utf8")
+    .digest("base64");
+
+  req.setHeader("X-Shopify-Hmac-Sha256", firma);
+}
+
+docs {
+  Requiere SHOPIFY_WEBHOOK_SECRET en el .env, igual al `webhook_secret` del
+  environment de Bruno.
+
+  Debe responder 200 de INMEDIATO, sin esperar a CT: si el middleware tardara,
+  Shopify reintentaría el aviso y cada reintento sería un pedido de más.
+
+  Mándalo dos veces: el `externalReference` de la orden no cambia. Ésa es la
+  prueba de idempotencia.
+}
+
+assert {
+  res.status: eq 200
+  res.body.recibido: eq true
+}

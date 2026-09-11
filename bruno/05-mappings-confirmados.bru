@@ -1,0 +1,13 @@
+meta {
+  name: 05 Mappings confirmados
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{base_url}}/mappings?status=confirmed
+}
+
+assert {
+  res.status: eq 200
+}

@@ -1,0 +1,19 @@
+meta {
+  name: 06 Inventory sync (503 sin credenciales de CT)
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{base_url}}/inventory/sync
+  body: json
+}
+
+body:json {
+  { "limit": 5 }
+}
+
+docs {
+  RF-02. Sin credenciales de CT debe responder 503 diciendo QUÉ variable falta,
+  no un 500 genérico. Con el .env completo devuelve el resultado por producto.
+}

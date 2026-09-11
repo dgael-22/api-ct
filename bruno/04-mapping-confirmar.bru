@@ -1,0 +1,26 @@
+meta {
+  name: 04 Mapping - confirmar
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{base_url}}/mappings
+  body: json
+}
+
+body:json {
+  {
+    "shopifyVariantId": "{{variant_id}}",
+    "shopifySku": "{{shopify_sku}}",
+    "ctSku": "{{ct_sku}}",
+    "partNumber": "ABC-16GB",
+    "status": "confirmed",
+    "confirmedBy": "diego"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.status: eq confirmed
+}

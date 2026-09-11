@@ -1,0 +1,27 @@
+meta {
+  name: 09 Orden - estado y relacion con CT
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{base_url}}/orders/{{order_id}}
+}
+
+docs {
+  RF-05. Después del webhook la orden debe existir con:
+
+    status: "received"     si falta configuración de CT
+    status: "sent"         creada en CT, esperando confirmación
+    status: "accepted"     confirmada: la compra quedó en firme
+    status: "rejected"     CT la rechazó
+    status: "uncertain"    respuesta incierta: NO reintentar, verificar en CT
+    status: "expired"      se pasó la ventana y CT la canceló
+
+  `externalReference` son los últimos 9 dígitos del ID de Shopify y no cambia
+  entre reintentos.
+}
+
+assert {
+  res.status: eq 200
+}

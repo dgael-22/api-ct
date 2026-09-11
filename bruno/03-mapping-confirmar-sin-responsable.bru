@@ -1,0 +1,29 @@
+meta {
+  name: 03 Mapping - confirmar SIN responsable (debe fallar)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{base_url}}/mappings
+  body: json
+}
+
+body:json {
+  {
+    "shopifyVariantId": "{{variant_id}}",
+    "shopifySku": "{{shopify_sku}}",
+    "ctSku": "{{ct_sku}}",
+    "status": "confirmed"
+  }
+}
+
+docs {
+  RF-01. Confirmar es un acto humano: sin `confirmedBy` la API rechaza.
+  Si esto devolviera 200, el candado del ETS no serviría.
+}
+
+assert {
+  res.status: eq 400
+  res.body.error: eq confirmacion_sin_responsable
+}

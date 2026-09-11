@@ -1,0 +1,14 @@
+meta {
+  name: 11 Orden inexistente (404)
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{base_url}}/orders/999999999
+}
+
+assert {
+  res.status: eq 404
+  res.body.error: eq orden_no_registrada
+}

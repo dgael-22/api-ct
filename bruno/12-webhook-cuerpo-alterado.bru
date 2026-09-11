@@ -1,0 +1,41 @@
+meta {
+  name: 12 Webhook - cuerpo alterado despues de firmar (401)
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{base_url}}/webhooks/shopify/orders-paid
+  body: text
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:text {
+  el script de pre-request reemplaza este cuerpo
+}
+
+script:pre-request {
+  // Se firma un cuerpo y se envía OTRO: es el ataque que la firma debe
+  // detener. Alguien con la firma de una orden legítima no puede cambiarle
+  // la cantidad ni el SKU.
+  const crypto = require("crypto");
+
+  const original = JSON.stringify({ id: 1, quantity: 1 });
+  const alterado = JSON.stringify({ id: 1, quantity: 999 });
+
+  const firma = crypto
+    .createHmac("sha256", bru.getEnvVar("webhook_secret"))
+    .update(original, "utf8")
+    .digest("base64");
+
+  req.setBody(alterado);
+  req.setHeader("X-Shopify-Hmac-Sha256", firma);
+}
+
+assert {
+  res.status: eq 401
+  res.body.error: eq firma_invalida
+}

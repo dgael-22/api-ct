@@ -1,0 +1,30 @@
+meta {
+  name: 07 Webhook - firma invalida (401)
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{base_url}}/webhooks/shopify/orders-paid
+  body: text
+}
+
+headers {
+  Content-Type: application/json
+  X-Shopify-Hmac-Sha256: basura
+}
+
+body:text {
+  {"id":1}
+}
+
+docs {
+  RF-03. Firma que no coincide: 401 y nada más. Cualquier otra respuesta aquí
+  es un agujero de seguridad: significaría que alguien puede meter órdenes
+  falsas al middleware.
+}
+
+assert {
+  res.status: eq 401
+  res.body.error: eq firma_invalida
+}
