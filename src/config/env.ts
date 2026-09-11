@@ -69,7 +69,12 @@ export const env = {
     get clientId(): string { return requerida("SHOPIFY_CLIENT_ID"); },
     get clientSecret(): string { return requerida("SHOPIFY_CLIENT_SECRET"); },
     get apiVersion(): string { return opcional("SHOPIFY_API_VERSION", "2025-07"); },
-    get accessToken(): string { return requerida("SHOPIFY_ACCESS_TOKEN"); },
+    /**
+     * Token permanente de una app vieja creada en el admin (`shpat_...`).
+     * Opcional: las apps del Dev Dashboard ya no dan uno — ahí el token se
+     * pide con client credentials y dura 24 h.
+     */
+    get tokenFijo(): string { return opcional("SHOPIFY_ACCESS_TOKEN", ""); },
     get webhookSecret(): string { return requerida("SHOPIFY_WEBHOOK_SECRET"); },
     get locationId(): string { return requerida("SHOPIFY_LOCATION_ID"); },
   },
