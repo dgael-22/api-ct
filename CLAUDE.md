@@ -11,6 +11,7 @@ npm run typecheck      # npx tsc --noEmit — correr SIEMPRE antes de un push
 npm test               # flujo del pedido y autenticación, sin red ni base
 npm run simular:ct      # paso 6: servidor real + CT simulado, 4 escenarios; Shopify apagado
 npm run build && npm start
+npm run ct:importar -- <catalogo> [--resumen|--aplicar|--local]   # productos de CT a Shopify
 npm run migration:run · inspect:csv -- <csv> · import:mappings -- <csv> · sync:inventory · confirm:orders
 
 npm run shopify:locations                       # token + alcances reales + Locations
@@ -34,6 +35,7 @@ Los scripts de Shopify son **idempotentes** y sin `--aplicar` sólo simulan. Man
 - **Reintentar `blocked` es manual** (`POST /orders/:id/retry`), nunca automático: pudo surtirse por otro lado.
 - **CT exige IP fija.** Producción sale por el proxy de `deploy/proxy` (DigitalOcean + Caddy): `CT_BASE_URL` al proxy y `CT_PROXY_KEY`. Nunca destruir el Droplet: su IP es la registrada en CT.
 - **Existencias automáticas**: `INVENTORY_SYNC_MINUTES` (0 = apagado), pausa `CT_PAUSA_MS` entre productos; un 429 de CT corta la pasada.
+- **Importar catálogo de CT** (`npm run ct:importar`, `POST /catalogo/ct/importar`, `ImportadorCt`): productos nuevos en BORRADOR; si ya los creó el importador, sólo precio y costo; nunca toca claves mapeadas a mano. El formato del catálogo es PENDIENTE con CT: se ajustan los ALIAS de `catalogoCt.ts`.
 - **Bitácora** (`registrarEvento`, tabla `bitacora`, `GET /bitacora`): nunca rompe el flujo y nunca recibe secretos.
 - **`/mappings`, `/inventory`, `/orders` y `/bitacora` piden `x-api-key`** (`ADMIN_API_KEY`) y fallan cerrados sin ella. `/health` y el webhook (HMAC) no.
 

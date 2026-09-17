@@ -1,0 +1,33 @@
+{
+  "_nota": "Catálogo INVENTADO para probar el importador. El formato real lo definirá CT; el importador reconoce varios nombres de campo (ver src/services/catalogoCt.ts).",
+  "productos": [
+    {
+      "clave": "LAPEJE0010",
+      "nombre": "Laptop de ejemplo 14 pulgadas, 16 GB RAM, 512 GB SSD",
+      "descripcion_larga": "Equipo de ejemplo para probar la importación.\n\nNo es un producto real de CT.",
+      "marca": "MarcaEjemplo",
+      "categoria": "Computadoras",
+      "subcategoria": "Laptops",
+      "numParte": "EJ-14-16-512",
+      "upc": "000000000017",
+      "imagen": "https://placehold.co/800x800/png?text=Laptop+ejemplo"
+    },
+    {
+      "codigo": "MONEJE0020",
+      "descripcion_corta": "Monitor de ejemplo 27 pulgadas",
+      "Marca": "MarcaEjemplo",
+      "Categoria": "Monitores",
+      "imagenes": ["https://placehold.co/800x800/png?text=Monitor+ejemplo"]
+    },
+    {
+      "clave": "ACCEJE0030",
+      "nombre": "Mouse inalámbrico de ejemplo",
+      "marca": "OtraMarca",
+      "categoria": "Accesorios",
+      "subcategoria": "Mouse"
+    },
+    {
+      "nombre": "Renglón sin clave: el importador lo descarta"
+    }
+  ]
+}

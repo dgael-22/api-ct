@@ -119,6 +119,12 @@ async function escenario(nombre, puerto) {
     const todas = await pedir("GET", "/orders");
     console.log(`registros en la base: ${todas.json?.total}`);
 
+    // Importación de catálogo en simulación: consulta a CT, no escribe en Shopify.
+    const ejemplo = JSON.parse(fs.readFileSync(path.join(RAIZ, "ejemplos", "catalogo-ct-ejemplo.json"), "utf8"));
+    const catalogo = await pedir("POST", "/catalogo/ct/importar", { productos: ejemplo.productos, categorias: ["Laptops"] });
+    const res = catalogo.json?.resultados ?? [];
+    console.log(`POST /catalogo/ct/importar -> ${catalogo.status} ${res.map((r) => `${r.clave}:${r.accion}`).join(", ") || catalogo.json?.error}`);
+
     const bitacora = await pedir("GET", "/bitacora?limit=500");
     const tipos = {};
     for (const e of bitacora.json?.eventos ?? []) tipos[e.tipo] = (tipos[e.tipo] ?? 0) + 1;

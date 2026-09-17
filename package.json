@@ -18,6 +18,7 @@
     "import:mappings": "tsx src/scripts/importConfirmedMappings.ts",
     "sync:inventory": "tsx src/scripts/syncInventory.ts",
     "confirm:orders": "tsx src/scripts/confirmOrders.ts",
+    "ct:importar": "tsx src/scripts/importarCatalogoCt.ts",
     "shopify:locations": "tsx src/scripts/shopifyLocations.ts",
     "shopify:catalogo": "tsx src/scripts/shopifyCatalogo.ts",
     "shopify:webhook": "tsx src/scripts/shopifyWebhook.ts",

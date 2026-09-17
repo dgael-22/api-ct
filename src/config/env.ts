@@ -115,6 +115,17 @@ export const env = {
     get almacen(): string { return requerida("CT_ALMACEN"); },
   },
 
+  /** Importación de productos de CT a Shopify. */
+  catalogo: {
+    /** Margen sobre el costo de CT, en porcentaje. */
+    get margenPct(): number { return Number(opcional("PRECIO_MARGEN_PCT", "20")); },
+    get ivaPct(): number { return Number(opcional("PRECIO_IVA_PCT", "16")); },
+    /** PENDIENTE con CT: si su precio ya incluye IVA. Mientras, se suma. */
+    get precioCtIncluyeIva(): boolean {
+      return opcional("CT_PRECIO_INCLUYE_IVA", "false").toLowerCase() === "true";
+    },
+  },
+
   db: {
     /** sqlite:./data/schu-ct.sqlite  |  postgresql://... */
     get url(): string { return opcional("DATABASE_URL", "sqlite:./data/schu-ct.sqlite"); },

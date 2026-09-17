@@ -280,6 +280,46 @@ consulta por producto separada por `CT_PAUSA_MS` (1000 por defecto) y, si CT
 responde 429, corta la pasada. El resumen queda en la bitácora
 (`inventario_sincronizado`). Manual: `POST /inventory/sync` o `npm run sync:inventory`.
 
+## Importar productos de CT a Shopify
+
+CT Connect ofrece su catálogo para venderlo sin inventario (dropshipping).
+`npm run ct:importar` toma el archivo de catálogo que entregue CT (JSON o CSV)
+y crea los productos en Shopify:
+
+```bash
+npm run ct:importar -- catalogo.json --resumen                         # qué trae el archivo
+npm run ct:importar -- catalogo.json --categoria Laptops --limite 5    # simulación
+npm run ct:importar -- catalogo.json --categoria Laptops --aplicar     # escribe
+```
+
+Filtros repetibles: `--categoria` (también busca en subcategoría), `--marca`,
+`--clave`; y `--limite N`.
+
+Por cada producto la API consulta a CT el precio y la existencia, calcula el
+precio de venta (`PRECIO_MARGEN_PCT`, `PRECIO_IVA_PCT`, `CT_PRECIO_INCLUYE_IVA`;
+convierte a pesos si viene en dólares), y:
+
+- **si no existe**, lo crea **en borrador** con imágenes, marca (`vendor`),
+  categoría (`productType`), tags `ct` y `marca:…`, SKU = clave de CT, costo y
+  el metafield `custom.ct_clave`;
+- **si ya lo había creado el importador**, sólo actualiza precio y costo: el
+  título y la descripción editados a mano se respetan;
+- fija la existencia y deja el mapeo confirmado (`confirmedBy: importacion-ct`).
+
+Nunca publica: los productos se revisan y activan a mano. Una clave de CT que
+ya está mapeada a un producto dado de alta a mano **no se toca**.
+
+El comando manda el catálogo por lotes de 50 a `POST /catalogo/ct/importar`
+de producción (necesita `API_REMOTA_URL` y `API_REMOTA_CLAVE` en tu `.env`),
+porque CT sólo acepta llamadas desde la IP registrada. `--local` lo corre en tu
+máquina con la base y el CT del `.env` (útil con `CT_MODO=simulado`).
+
+**Pendiente con CT:** el formato real del catálogo con descripciones e
+imágenes. `src/services/catalogoCt.ts` reconoce varios nombres de campo
+(`clave`/`codigo`, `nombre`/`descripcion_corta`, `imagen`/`imagenes`, …);
+cuando llegue el archivo, `--resumen` dice qué campos trae y se ajustan los
+alias. Hay un catálogo inventado en `ejemplos/catalogo-ct-ejemplo.json`.
+
 ## IP fija para CT
 
 CT sólo acepta llamadas desde IPs registradas. Con Railway Hobby las llamadas

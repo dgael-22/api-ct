@@ -202,6 +202,114 @@ export class ShopifyClient {
     };
   }
 
+  /** Producto al que pertenece una variante (para actualizar lo ya importado). */
+  async productoDeVariante(variantId: string): Promise<string | null> {
+    const gid = variantId.startsWith("gid://")
+      ? variantId
+      : `gid://shopify/ProductVariant/${variantId}`;
+    const datos = await this.consultar<{ productVariant: { product: { id: string } } | null }>(
+      `query productoDeVariante($id: ID!) {
+         productVariant(id: $id) { product { id } }
+       }`,
+      { id: gid }
+    );
+    return datos.productVariant?.product.id ?? null;
+  }
+
+  /** Busca por handle; sirve cuando el mapeo local se perdió pero el producto existe. */
+  async productoPorHandle(
+    handle: string
+  ): Promise<{ productId: string; variantId: string; inventoryItemId: string } | null> {
+    const datos = await this.consultar<{
+      products: {
+        nodes: {
+          id: string; handle: string;
+          variants: { nodes: { id: string; inventoryItem: { id: string } | null }[] };
+        }[];
+      };
+    }>(
+      `query productoPorHandle($q: String!) {
+         products(first: 1, query: $q) {
+           nodes { id handle variants(first: 1) { nodes { id inventoryItem { id } } } }
+         }
+       }`,
+      { q: `handle:${handle}` }
+    );
+    const nodo = datos.products.nodes[0];
+    const variante = nodo?.variants.nodes[0];
+    if (!nodo || nodo.handle !== handle || !variante?.inventoryItem) return null;
+    return { productId: nodo.id, variantId: variante.id, inventoryItemId: variante.inventoryItem.id };
+  }
+
+  /** Precio de venta y costo de una variante; no toca título ni descripción. */
+  async actualizarPrecio(productId: string, variantId: string, precio: number, costo: number): Promise<void> {
+    const gid = variantId.startsWith("gid://")
+      ? variantId
+      : `gid://shopify/ProductVariant/${variantId}`;
+    const datos = await this.consultar<{ productVariantsBulkUpdate: { userErrors: ErrorUsuario[] } }>(
+      `mutation actualizarPrecio($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+         productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+           userErrors { field message }
+         }
+       }`,
+      {
+        productId,
+        variants: [{ id: gid, price: precio.toFixed(2), inventoryItem: { cost: costo.toFixed(2) } }],
+      }
+    );
+    const errores = datos.productVariantsBulkUpdate.userErrors;
+    if (errores?.length) {
+      throw new ErrorShopify(
+        "Shopify rechazó el precio: " + errores.map((e) => e.message).join("; "), errores
+      );
+    }
+  }
+
+  /**
+   * Crea o actualiza un producto de una sola variante con `productSet`.
+   * Con `productId` actualiza; sin él, crea. Devuelve los IDs que hacen falta
+   * para el mapeo y el inventario.
+   */
+  async guardarProducto(
+    entrada: Record<string, unknown>,
+    productId?: string | null
+  ): Promise<{ productId: string; variantId: string; inventoryItemId: string }> {
+    const datos = await this.consultar<{
+      productSet: {
+        product: {
+          id: string;
+          variants: { nodes: { id: string; inventoryItem: { id: string } | null }[] };
+        } | null;
+        userErrors: ErrorUsuario[];
+      };
+    }>(
+      `mutation guardarProducto($input: ProductSetInput!) {
+         productSet(input: $input, synchronous: true) {
+           product {
+             id
+             variants(first: 1) { nodes { id inventoryItem { id } } }
+           }
+           userErrors { field message }
+         }
+       }`,
+      { input: productId ? { ...entrada, id: productId } : entrada }
+    );
+
+    const { product, userErrors } = datos.productSet;
+    if (userErrors?.length || !product) {
+      throw new ErrorShopify(
+        "Shopify rechazó el producto: " +
+          (userErrors ?? []).map((e) => `${(e.field ?? []).join(".")}: ${e.message}`).join("; "),
+        userErrors
+      );
+    }
+    const variante = product.variants.nodes[0];
+    if (!variante?.inventoryItem) {
+      throw new ErrorShopify("Shopify guardó el producto pero no devolvió su variante", product);
+    }
+    return { productId: product.id, variantId: variante.id, inventoryItemId: variante.inventoryItem.id };
+  }
+
   // -------------------------------------------------------------- inventario
 
   /**

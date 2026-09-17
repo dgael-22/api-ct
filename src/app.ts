@@ -15,10 +15,11 @@
  *   GET  /orders/:shopifyOrderId              una orden
  *   POST /orders/confirm                      confirma en CT los pendientes
  *   POST /orders/:shopifyOrderId/retry        reprocesa una orden "blocked"
+ *   POST /catalogo/ct/importar                 importa productos de CT a Shopify
  *   GET  /bitacora?orden=&tipo=&nivel=&limit=  eventos guardados en la base
  *   POST /webhooks/shopify/orders-paid        RF-03: la orden pagada
  *
- * /mappings, /inventory, /orders y /bitacora piden la cabecera x-api-key (ADMIN_API_KEY).
+ * /mappings, /inventory, /orders, /bitacora y /catalogo piden la cabecera x-api-key (ADMIN_API_KEY).
  * /health y el webhook no: el primero no expone datos y el segundo valida HMAC.
  */
 import express, { NextFunction, Request, Response } from "express";
@@ -30,6 +31,8 @@ import { requerirClaveAdmin } from "./middleware/autenticacion";
 import { depurarBitacora, registrarEvento } from "./services/bitacora";
 import { normalizarVariante } from "./entities/ProductMapping";
 import { crearRutasWebhook } from "./routes/shopifyWebhooks";
+import { filtrarCatalogo, normalizarProductoCt, ProductoCt } from "./services/catalogoCt";
+import { ImportadorCt } from "./services/ImportadorCt";
 import { InventorySyncService } from "./services/InventorySyncService";
 import { OrderService } from "./services/OrderService";
 import { ShopifyClient } from "./services/ShopifyClient";
@@ -42,7 +45,7 @@ app.use(crearRutasWebhook());
 app.use(express.json({ limit: "2mb" }));
 
 // Endpoints de gestión: sólo con la clave de administración.
-app.use(["/mappings", "/inventory", "/orders", "/bitacora"], requerirClaveAdmin);
+app.use(["/mappings", "/inventory", "/orders", "/bitacora", "/catalogo"], requerirClaveAdmin);
 
 // ------------------------------------------------------------------ health ---
 
@@ -252,6 +255,62 @@ app.get("/orders/:shopifyOrderId", async (peticion: Request, respuesta: Response
     return;
   }
   respuesta.json(registro);
+});
+
+// ----------------------------------------------------------------- catálogo ---
+
+/** Máximo de productos por petición: cada uno consulta a CT y escribe en Shopify. */
+export const LOTE_CATALOGO = 50;
+
+const lista = (valor: unknown): string[] | undefined =>
+  Array.isArray(valor) ? valor.map(String).filter(Boolean) : undefined;
+
+/**
+ * Importa a Shopify los productos del catálogo de CT que vienen en el cuerpo
+ * (el archivo que entrega CT, tal cual). Corre aquí y no en la computadora de
+ * quien lo lanza porque CT sólo acepta llamadas desde la IP registrada.
+ * Sin `aplicar: true` sólo simula.
+ */
+app.post("/catalogo/ct/importar", async (peticion: Request, respuesta: Response, siguiente: NextFunction) => {
+  try {
+    const cuerpo = peticion.body ?? {};
+    if (!Array.isArray(cuerpo.productos)) {
+      respuesta.status(400).json({ error: "faltan_productos", detalle: "Manda { productos: [...] }." });
+      return;
+    }
+    const normalizados = (cuerpo.productos as unknown[])
+      .map((c) => (c && typeof c === "object" ? normalizarProductoCt(c as Record<string, unknown>) : null))
+      .filter((p): p is ProductoCt => p !== null);
+    const elegidos = filtrarCatalogo(normalizados, {
+      categorias: lista(cuerpo.categorias),
+      marcas: lista(cuerpo.marcas),
+      claves: lista(cuerpo.claves),
+      limite: Number(cuerpo.limite) || undefined,
+    });
+    if (elegidos.length > LOTE_CATALOGO) {
+      respuesta.status(413).json({
+        error: "lote_muy_grande",
+        detalle: `Máximo ${LOTE_CATALOGO} productos por petición; llegaron ${elegidos.length} después de filtrar.`,
+      });
+      return;
+    }
+
+    const { productos } = repositorios();
+    const importador = new ImportadorCt(crearClienteCt(), new ShopifyClient(), productos);
+    const resultados = await importador.importar(elegidos, {
+      aplicar: cuerpo.aplicar === true,
+      pausaMs: env.ct.pausaMs,
+    });
+    respuesta.json({
+      aplicado: cuerpo.aplicar === true,
+      recibidos: cuerpo.productos.length,
+      invalidos: cuerpo.productos.length - normalizados.length,
+      procesados: resultados.length,
+      resultados,
+    });
+  } catch (e) {
+    siguiente(e);
+  }
 });
 
 // ----------------------------------------------------------------- bitácora ---
