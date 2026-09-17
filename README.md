@@ -195,8 +195,17 @@ faltantes, porque no se usan.
 
 ## Probarla con Bruno o Postman
 
-Nivel "manual" de la sección 9 del ETS. No hay suite automatizada en el repo:
-estas dos colecciones son para probar a mano.
+Nivel "manual" de la sección 9 del ETS. Lo automatizado va aparte:
+
+```bash
+npm test               # flujo del pedido y autenticación, sin red ni base
+npm run simular:ct     # servidor real + CT simulado en los cuatro escenarios
+```
+
+`simular:ct` apaga Shopify y usa una base temporal: es seguro aunque el `.env`
+apunte a la tienda real. Por lo mismo, no prueba las escrituras a Shopify.
+
+Las dos colecciones son para probar a mano.
 
 **Bruno** — abre la carpeta `bruno/` como colección y elige el environment
 `local`. Las 11 peticiones van numeradas y traen sus asserts.
@@ -207,7 +216,11 @@ tests y `console.log` de lo importante.
 
 Córrelas **en orden**: las de mapping preparan el dato que usa el webhook.
 
-Los niveles 1 a 3 no necesitan ninguna credencial. Para el webhook hace falta
+`/mappings`, `/inventory` y `/orders` piden la cabecera `x-api-key`: las
+colecciones la mandan con `admin_api_key` del environment (por defecto
+`clave_de_prueba`), que debe ser igual a `ADMIN_API_KEY` del `.env`.
+
+Los niveles 1 a 3 no necesitan credenciales de Shopify ni de CT. Para el webhook hace falta
 `SHOPIFY_WEBHOOK_SECRET` en el `.env`, igual al `webhook_secret` del
 environment (por defecto `secreto_de_prueba`). La firma HMAC la calcula un
 script de pre-request; no hay que generarla a mano.
@@ -272,6 +285,7 @@ DATABASE_URL=${{Postgres.DATABASE_URL}}
 DB_SSL=false
 NODE_ENV=production
 CONFIRM_INTERVAL_MINUTES=15
+ADMIN_API_KEY=...
 
 SHOPIFY_SHOP_DOMAIN=schuprueba-dev.myshopify.com
 SHOPIFY_CLIENT_ID=...
@@ -291,6 +305,11 @@ CT_ALMACEN=...
 `DB_SSL=false` porque por la red interna de Railway
 (`postgres.railway.internal`) no se usa TLS. Si conectas por la URL pública,
 ponlo en `true`.
+
+`ADMIN_API_KEY` protege `/mappings`, `/inventory` y `/orders` (cabecera
+`x-api-key`). Sin ella esos endpoints responden 503: fallan cerrados. Genera una
+larga con
+`node -e "console.log(require('crypto').randomBytes(24).toString('hex'))"`.
 
 `APP_BASE_URL` no hace falta: se deduce de `RAILWAY_PUBLIC_DOMAIN`.
 

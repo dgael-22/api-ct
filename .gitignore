@@ -10,6 +10,8 @@ data/*.sqlite-journal
 # Exportaciones del catálogo: se regeneran con npm run shopify:catalogo.
 # Son datos de la tienda, no código.
 data/*.csv
+# Lo genera schu-catalogo (python retaguear.py): tampoco es código.
+data/vocabulario.json
 *.log
 *.zip
 .DS_Store

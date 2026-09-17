@@ -4,6 +4,26 @@
     "description": "Pruebas manuales del middleware SCHU – Shopify – CT Online.\n\nCorre las peticiones EN ORDEN: las de mapping preparan el dato que usa el webhook.\n\nLos niveles 1 a 4 no necesitan credenciales de CT ni de Shopify. El webhook sí necesita SHOPIFY_WEBHOOK_SECRET en el .env, igual al del environment.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      {
+        "key": "key",
+        "value": "x-api-key",
+        "type": "string"
+      },
+      {
+        "key": "value",
+        "value": "{{admin_api_key}}",
+        "type": "string"
+      },
+      {
+        "key": "in",
+        "value": "header",
+        "type": "string"
+      }
+    ]
+  },
   "variable": [
     {
       "key": "base_url",
