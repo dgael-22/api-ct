@@ -1,0 +1,3 @@
+# Lo que corre en Linux (el Droplet) necesita LF aunque se edite en Windows.
+*.sh text eol=lf
+deploy/proxy/Caddyfile text eol=lf

@@ -17,6 +17,7 @@
  */
 import { env } from "../config/env";
 import { repositorios } from "../data-source";
+import { registrarEvento } from "../services/bitacora";
 import { InventorySyncService } from "../services/InventorySyncService";
 import { OrderService } from "../services/OrderService";
 import { ShopifyClient } from "../services/ShopifyClient";
@@ -53,6 +54,9 @@ async function unaPasada(): Promise<void> {
   } catch (e) {
     // Falta de configuración o CT caído: se avisa y se intenta en la siguiente.
     console.error("[confirmacion] no se pudo correr:", (e as Error).message);
+    await registrarEvento({
+      nivel: "error", tipo: "confirmacion_no_corrio", mensaje: (e as Error).message,
+    });
   } finally {
     corriendo = false;
   }

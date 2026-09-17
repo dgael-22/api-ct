@@ -261,6 +261,23 @@ autorizar la integración primero.
 
 ---
 
+## Bitácora
+
+`GET /bitacora` (con `x-api-key`) devuelve los eventos guardados en la base,
+lo más reciente primero: webhooks recibidos o con firma inválida, resultado de
+cada orden, confirmaciones, reintentos, pedidos por vencer, accesos rechazados
+y errores. Filtros: `?orden=<id de Shopify>`, `?tipo=`, `?nivel=info|aviso|error`,
+`?limit=` (máx. 500).
+
+Existe porque Railway Hobby borra los logs a los 7 días. Los eventos se
+conservan `BITACORA_DIAS` (365 por defecto) y nunca incluyen claves ni tokens.
+
+## IP fija para CT
+
+CT sólo acepta llamadas desde IPs registradas. Con Railway Hobby las llamadas
+salen por un Droplet de DigitalOcean con Caddy: guía completa en
+[deploy/proxy/README.md](deploy/proxy/README.md).
+
 ## Desplegar en Railway
 
 Shopify necesita una **URL pública con HTTPS** para mandar los webhooks. Railway
@@ -308,7 +325,8 @@ SHOPIFY_ACCESS_TOKEN=...
 SHOPIFY_WEBHOOK_SECRET=...
 SHOPIFY_LOCATION_ID=...
 
-CT_BASE_URL=https://api.ctonline.mx
+CT_BASE_URL=https://api.ctonline.mx      # o el proxy: ver deploy/proxy
+CT_PROXY_KEY=...                         # sólo con el proxy de IP fija
 CT_EMAIL=...
 CT_CLIENTE=...
 CT_RFC=...

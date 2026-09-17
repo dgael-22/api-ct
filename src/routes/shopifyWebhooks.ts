@@ -19,6 +19,7 @@ import crypto from "node:crypto";
 import express, { Request, Response, Router } from "express";
 import { env } from "../config/env";
 import { repositorios } from "../data-source";
+import { registrarEvento } from "../services/bitacora";
 import { InventorySyncService } from "../services/InventorySyncService";
 import { LineaOrden, OrdenShopify, OrderService } from "../services/OrderService";
 import { ShopifyClient } from "../services/ShopifyClient";
@@ -92,6 +93,10 @@ export function crearRutasWebhook(): Router {
       }
 
       if (!Buffer.isBuffer(crudo) || !firmaValida(crudo, firma, secreto)) {
+        void registrarEvento({
+          nivel: "aviso", tipo: "webhook_firma_invalida",
+          mensaje: `Webhook con firma inválida desde ${peticion.ip}`,
+        });
         respuesta.status(401).json({ error: "firma_invalida" });
         return;
       }
@@ -112,6 +117,10 @@ export function crearRutasWebhook(): Router {
 
       // Se acusa recibo YA. Shopify no debe esperar a CT.
       respuesta.status(200).json({ recibido: true, orden: orden.id });
+      void registrarEvento({
+        tipo: "webhook_recibido", shopifyOrderId: orden.id,
+        mensaje: `Orden pagada ${orden.name ?? orden.id} con ${orden.lineas.length} línea(s)`,
+      });
 
       // Y el trabajo continúa aparte.
       procesarEnSegundoPlano(orden).catch((e) => {

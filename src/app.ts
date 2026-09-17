@@ -15,9 +15,10 @@
  *   GET  /orders/:shopifyOrderId              una orden
  *   POST /orders/confirm                      confirma en CT los pendientes
  *   POST /orders/:shopifyOrderId/retry        reprocesa una orden "blocked"
+ *   GET  /bitacora?orden=&tipo=&nivel=&limit=  eventos guardados en la base
  *   POST /webhooks/shopify/orders-paid        RF-03: la orden pagada
  *
- * /mappings, /inventory y /orders piden la cabecera x-api-key (ADMIN_API_KEY).
+ * /mappings, /inventory, /orders y /bitacora piden la cabecera x-api-key (ADMIN_API_KEY).
  * /health y el webhook no: el primero no expone datos y el segundo valida HMAC.
  */
 import express, { NextFunction, Request, Response } from "express";
@@ -25,6 +26,7 @@ import { env, estaDefinida, FaltaConfiguracion } from "./config/env";
 import { esPostgres, inicializarBd, repositorios } from "./data-source";
 import { iniciarConfirmacionAutomatica } from "./jobs/confirmScheduler";
 import { requerirClaveAdmin } from "./middleware/autenticacion";
+import { depurarBitacora, registrarEvento } from "./services/bitacora";
 import { normalizarVariante } from "./entities/ProductMapping";
 import { crearRutasWebhook } from "./routes/shopifyWebhooks";
 import { InventorySyncService } from "./services/InventorySyncService";
@@ -39,7 +41,7 @@ app.use(crearRutasWebhook());
 app.use(express.json({ limit: "2mb" }));
 
 // Endpoints de gestión: sólo con la clave de administración.
-app.use(["/mappings", "/inventory", "/orders"], requerirClaveAdmin);
+app.use(["/mappings", "/inventory", "/orders", "/bitacora"], requerirClaveAdmin);
 
 // ------------------------------------------------------------------ health ---
 
@@ -67,6 +69,8 @@ app.get("/health", (_peticion: Request, respuesta: Response) => {
         estaDefinida("CT_ACCESS_TOKEN") ||
         (estaDefinida("CT_EMAIL") && estaDefinida("CT_CLIENTE") && estaDefinida("CT_RFC")),
       almacen: estaDefinida("CT_ALMACEN"),
+      // Sale por el proxy de IP fija cuando hay clave de proxy.
+      proxy: estaDefinida("CT_PROXY_KEY"),
     },
     seguridad: { claveAdmin: estaDefinida("ADMIN_API_KEY") },
     baseDeDatos: esPostgres() ? "postgres" : "sqlite",
@@ -248,15 +252,37 @@ app.get("/orders/:shopifyOrderId", async (peticion: Request, respuesta: Response
   respuesta.json(registro);
 });
 
+// ----------------------------------------------------------------- bitácora ---
+
+/** Lo más reciente primero. Filtros opcionales: orden, tipo, nivel. */
+app.get("/bitacora", async (peticion: Request, respuesta: Response) => {
+  const { eventos } = repositorios();
+  const filtro: Record<string, string> = {};
+  if (peticion.query.orden) filtro.shopifyOrderId = String(peticion.query.orden);
+  if (peticion.query.tipo) filtro.tipo = String(peticion.query.tipo);
+  if (peticion.query.nivel) filtro.nivel = String(peticion.query.nivel);
+  const limite = Math.min(Math.max(Number(peticion.query.limit ?? 100) || 100, 1), 500);
+  const registros = await eventos.find({
+    where: filtro as never,
+    take: limite,
+    order: { id: "DESC" },
+  });
+  respuesta.json({ total: registros.length, eventos: registros });
+});
+
 // ------------------------------------------------------------------ errores ---
 
-app.use((error: Error, _peticion: Request, respuesta: Response, _siguiente: NextFunction) => {
+app.use((error: Error, peticion: Request, respuesta: Response, _siguiente: NextFunction) => {
   // Falta configuración: es un 503, no un error del cliente.
   if (error instanceof FaltaConfiguracion) {
     respuesta.status(503).json({ error: "falta_configuracion", variable: error.variable, detalle: error.message });
     return;
   }
   console.error("[error]", error.message);
+  void registrarEvento({
+    nivel: "error", tipo: "error_interno",
+    mensaje: `${peticion.method} ${peticion.originalUrl.split("?")[0]}: ${error.message}`,
+  });
   respuesta.status(500).json({ error: error.name || "error_interno", detalle: error.message });
 });
 
@@ -276,7 +302,15 @@ export async function arrancar(): Promise<void> {
     }
     iniciarConfirmacionAutomatica();
     advertirSiSimulado();
+    void registrarEvento({ tipo: "arranque", mensaje: `Servicio iniciado (CT ${env.ct.modo})` });
   });
+
+  // Limpieza diaria de la bitácora (BITACORA_DIAS, 365 por defecto).
+  const depurar = () => depurarBitacora(env.app.diasBitacora)
+    .then((n) => { if (n) console.log(`[bitacora] ${n} eventos viejos borrados`); })
+    .catch((e) => console.error("[bitacora] no se pudo depurar:", (e as Error).message));
+  void depurar();
+  setInterval(depurar, 24 * 60 * 60 * 1000).unref?.();
 }
 
 if (require.main === module) {

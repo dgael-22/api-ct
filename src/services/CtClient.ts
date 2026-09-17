@@ -15,7 +15,8 @@
  *
  *   GET  /existencia/:codigo/TOTAL -> { existencia_total: n }
  *
- * Todas las llamadas van con el header `x-auth`.
+ * Todas las llamadas van con el header `x-auth`. Si CT_PROXY_KEY está, además
+ * llevan `x-proxy-key`: salen por el proxy con IP fija, que la valida y la quita.
  *
  * Sin librería HTTP: fetch nativo, como recomienda la sección 7 del ETS.
  */
@@ -249,6 +250,7 @@ export class CtClient implements ClienteCt {
     for (;;) {
       const cabeceras: Record<string, string> = { "Content-Type": "application/json" };
       if (requiereToken) cabeceras["x-auth"] = await this.tokenAntesDeEnviar();
+      if (env.ct.proxyKey) cabeceras["x-proxy-key"] = env.ct.proxyKey;
 
       const abortador = new AbortController();
       const temporizador = setTimeout(() => abortador.abort(), timeoutMs);

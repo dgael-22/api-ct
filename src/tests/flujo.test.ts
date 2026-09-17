@@ -14,7 +14,8 @@ import express from "express";
 
 import { requerirClaveAdmin } from "../middleware/autenticacion";
 import { extraerOrden, firmaValida } from "../routes/shopifyWebhooks";
-import { DetalleExistencia, ErrorCt, PedidoCt, RespuestaPedidoCt } from "../services/CtClient";
+import { registrarEvento } from "../services/bitacora";
+import { CtClient, DetalleExistencia, ErrorCt, PedidoCt, RespuestaPedidoCt } from "../services/CtClient";
 import { CtSimulado, Escenario } from "../services/CtSimulado";
 import { crearClienteCt, reiniciarClienteCt } from "../services/ctFactory";
 import { normalizarVariante } from "../entities/ProductMapping";
@@ -281,6 +282,52 @@ test("el CT simulado es uno por proceso: el job encuentra el folio del webhook",
   const confirmado = await delJob.confirmarPedido(creado.respuestaCT.pedidoWeb);
   assert.equal(confirmado.okCode, "2000");
   reiniciarClienteCt();
+});
+
+// ------------------------------------------------------------ proxy de CT ---
+
+/** Servidor local que hace de CT (o del proxy) y anota las cabeceras que recibe. */
+async function conCtFalso(prueba: (url: string, cabeceras: Record<string, unknown>[]) => Promise<void>) {
+  const recibidas: Record<string, unknown>[] = [];
+  const app = express();
+  app.get("/existencia/:codigo", (q, r) => { recibidas.push(q.headers); r.json({ "01A": { existencia: 3 } }); });
+  const servidor = app.listen(0);
+  const { port } = servidor.address() as AddressInfo;
+  const anterior = { token: process.env.CT_ACCESS_TOKEN, clave: process.env.CT_PROXY_KEY };
+  try {
+    process.env.CT_ACCESS_TOKEN = "token-de-prueba";
+    await prueba(`http://127.0.0.1:${port}`, recibidas);
+  } finally {
+    servidor.close();
+    process.env.CT_ACCESS_TOKEN = anterior.token;
+    process.env.CT_PROXY_KEY = anterior.clave;
+    if (anterior.token === undefined) delete process.env.CT_ACCESS_TOKEN;
+    if (anterior.clave === undefined) delete process.env.CT_PROXY_KEY;
+  }
+}
+
+test("con CT_PROXY_KEY cada llamada lleva x-proxy-key además del token", async () => {
+  await conCtFalso(async (url, recibidas) => {
+    process.env.CT_PROXY_KEY = "clave-del-proxy";
+    const existencia = await new CtClient(url).existenciaPorAlmacen("ACC1");
+    assert.equal(existencia["01A"].existencia, 3);
+    assert.equal(recibidas[0]["x-proxy-key"], "clave-del-proxy");
+    assert.equal(recibidas[0]["x-auth"], "token-de-prueba");
+  });
+});
+
+test("sin CT_PROXY_KEY no se manda x-proxy-key (llamada directa a CT)", async () => {
+  await conCtFalso(async (url, recibidas) => {
+    delete process.env.CT_PROXY_KEY;
+    await new CtClient(url).existenciaPorAlmacen("ACC1");
+    assert.equal(recibidas[0]["x-proxy-key"], undefined);
+  });
+});
+
+// --------------------------------------------------------------- bitácora ---
+
+test("la bitácora nunca rompe el flujo: sin base no hace nada", async () => {
+  await assert.doesNotReject(registrarEvento({ tipo: "prueba", mensaje: "sin base" }));
 });
 
 // ------------------------------------------------------------ autenticación ---

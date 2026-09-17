@@ -18,13 +18,17 @@
 import "reflect-metadata";
 import { DataSource } from "typeorm";
 import { env } from "./config/env";
+import { Evento } from "./entities/Evento";
 import { OrderMapping } from "./entities/OrderMapping";
 import { ProductMapping } from "./entities/ProductMapping";
 import { CrearTablasIniciales1757000000000 } from "./migrations/1757000000000-CrearTablasIniciales";
 import { GuardarOrdenRecibida1758100000000 } from "./migrations/1758100000000-GuardarOrdenRecibida";
+import { CrearBitacora1758200000000 } from "./migrations/1758200000000-CrearBitacora";
 
-const ENTIDADES = [ProductMapping, OrderMapping];
-const MIGRACIONES = [CrearTablasIniciales1757000000000, GuardarOrdenRecibida1758100000000];
+const ENTIDADES = [ProductMapping, OrderMapping, Evento];
+const MIGRACIONES = [
+  CrearTablasIniciales1757000000000, GuardarOrdenRecibida1758100000000, CrearBitacora1758200000000,
+];
 
 /** ¿La URL apunta a PostgreSQL? */
 export function esPostgres(url: string = env.db.url): boolean {
@@ -84,5 +88,6 @@ export function repositorios() {
   return {
     productos: AppDataSource.getRepository(ProductMapping),
     ordenes: AppDataSource.getRepository(OrderMapping),
+    eventos: AppDataSource.getRepository(Evento),
   };
 }

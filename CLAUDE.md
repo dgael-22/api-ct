@@ -32,7 +32,9 @@ Los scripts de Shopify son **idempotentes** y sin `--aplicar` sólo simulan. Man
 - **`crearPedido` nunca reintenta.** Una conexión cortada no debe duplicar una compra.
 - **El mapeo se busca por variante** (`normalizarVariante`: gid o número). El SKU sólo es respaldo.
 - **Reintentar `blocked` es manual** (`POST /orders/:id/retry`), nunca automático: pudo surtirse por otro lado.
-- **`/mappings`, `/inventory` y `/orders` piden `x-api-key`** (`ADMIN_API_KEY`) y fallan cerrados sin ella. `/health` y el webhook (HMAC) no.
+- **CT exige IP fija.** Producción sale por el proxy de `deploy/proxy` (DigitalOcean + Caddy): `CT_BASE_URL` al proxy y `CT_PROXY_KEY`. Nunca destruir el Droplet: su IP es la registrada en CT.
+- **Bitácora** (`registrarEvento`, tabla `bitacora`, `GET /bitacora`): nunca rompe el flujo y nunca recibe secretos.
+- **`/mappings`, `/inventory`, `/orders` y `/bitacora` piden `x-api-key`** (`ADMIN_API_KEY`) y fallan cerrados sin ella. `/health` y el webhook (HMAC) no.
 
 ## Las tres detenciones del ETS
 
@@ -68,13 +70,15 @@ src/
   app.ts · config/env.ts (lectura perezosa: falla el endpoint, no el arranque)
   middleware/autenticacion.ts   x-api-key
   routes/shopifyWebhooks.ts     HMAC sobre el cuerpo crudo
-  services/   CtClient · CtSimulado · ctFactory · ShopifyClient · InventorySyncService · OrderService
+  services/   CtClient · CtSimulado · ctFactory · ShopifyClient · InventorySyncService · OrderService · bitacora
+deploy/proxy/  Caddyfile + instalar.sh del proxy con IP fija
   entities/ · jobs/confirmScheduler · migrations/ · scripts/ · tests/
 ```
 
 ## Pendientes
 
-- En Railway: `SHOPIFY_WEBHOOK_SECRET` (el client secret de la app) y `ADMIN_API_KEY`.
+- Proxy de IP fija: crear el Droplet, correr `instalar.sh`, poner `CT_BASE_URL` y `CT_PROXY_KEY` en Railway y mandar la IP a CT (ecom@ctin.com.mx).
+- Railway: pasar a plan Hobby antes de que acabe la prueba. El push a `main` no siempre dispara el deploy: verificar y usar "Deploy latest commit".
 - Dirección de envío: Shopify no tiene colonia; hoy sale de `company`. `tipoPago` y `cfdi` provisionales. Acordar con CT.
 - Mapeos: 88 candidatos en `data/candidatos-ct.csv` sin clave de CT (48 sin SKU, ya no importa). Hace falta el catálogo de CT.
 - Producción puede ir en `CT_MODO=real` sin credenciales: toda orden queda `blocked` (`ct_sin_conexion`) y se reintenta al llegar.

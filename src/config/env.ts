@@ -61,6 +61,8 @@ export const env = {
      * En Railway conviene 15: CT cancela solo lo que no se confirma en 48 h,
      * y ahí no hay nadie corriendo el comando a mano.
      */
+    /** Días que se conservan los eventos de la bitácora. 0 = para siempre. */
+    get diasBitacora(): number { return Number(opcional("BITACORA_DIAS", "365")); },
     get minutosConfirmacion(): number {
       return Number(opcional("CONFIRM_INTERVAL_MINUTES", "0"));
     },
@@ -96,6 +98,11 @@ export const env = {
     },
     /** Token ya emitido. Si no está, CtClient lo pide con email/cliente/rfc. */
     get accessToken(): string { return opcional("CT_ACCESS_TOKEN", ""); },
+    /**
+     * Clave del proxy de salida con IP fija (CT sólo acepta IPs registradas).
+     * Si está, cada llamada lleva `x-proxy-key` y CT_BASE_URL apunta al proxy.
+     */
+    get proxyKey(): string { return opcional("CT_PROXY_KEY", ""); },
     get email(): string { return requerida("CT_EMAIL"); },
     get cliente(): string { return requerida("CT_CLIENTE"); },
     get rfc(): string { return requerida("CT_RFC"); },

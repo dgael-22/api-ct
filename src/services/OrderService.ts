@@ -16,6 +16,7 @@ import { Repository } from "typeorm";
 import { env } from "../config/env";
 import { OrderMapping } from "../entities/OrderMapping";
 import { normalizarVariante, ProductMapping } from "../entities/ProductMapping";
+import { registrarEvento } from "./bitacora";
 import { ClienteCt, EnvioCt, ErrorCt, LineaPedidoCt, PedidoCt } from "./CtClient";
 import { InventorySyncService } from "./InventorySyncService";
 import { ShopifyClient } from "./ShopifyClient";
@@ -108,11 +109,38 @@ export class OrderService {
         detalle: "La orden se recibió antes de que se guardara su contenido. Reenvía el webhook desde Shopify.",
       };
     }
+    await registrarEvento({
+      tipo: "reintento", shopifyOrderId,
+      mensaje: `Reintento manual (estaba detenida por ${registro.ctStatus ?? "motivo desconocido"})`,
+    });
     return this.procesar(JSON.parse(registro.orderPayload) as OrdenShopify);
   }
 
-  /** Flujo completo de una orden elegible. */
+  /** Flujo completo de una orden elegible. Deja el resultado en la bitácora. */
   async procesar(orden: OrdenShopify): Promise<ResultadoOrden> {
+    try {
+      const resultado = await this.procesarOrden(orden);
+      const { status, ctStatus, ctOrderId, lastResponse } = resultado.registro;
+      await registrarEvento({
+        // "uncertain" pide que alguien revise en CT: es lo más urgente.
+        nivel: status === "uncertain" ? "error" : status === "accepted" ? "info" : "aviso",
+        tipo: "orden_procesada",
+        shopifyOrderId: orden.id,
+        mensaje: `${orden.name ?? orden.id} -> ${status}` +
+          (ctOrderId ? ` (CT ${ctOrderId})` : "") + (ctStatus ? ` · ${ctStatus}` : ""),
+        detalle: status === "accepted" ? null : lastResponse,
+      });
+      return resultado;
+    } catch (e) {
+      await registrarEvento({
+        nivel: "error", tipo: "orden_fallida", shopifyOrderId: orden.id,
+        mensaje: `${orden.name ?? orden.id}: ${(e as Error).message}`,
+      });
+      throw e;
+    }
+  }
+
+  private async procesarOrden(orden: OrdenShopify): Promise<ResultadoOrden> {
     const registro = await this.registrar(orden);
 
     // Idempotencia: si ya se envió, no se vuelve a enviar. "blocked" sí se
@@ -245,6 +273,10 @@ export class OrderService {
         `Se pasó la ventana de ${HORAS_PARA_CONFIRMAR} h; CT ya canceló el pedido ` +
         `${registro.ctOrderId}. Hay que levantarlo de nuevo a mano.`;
       await this.ordenes.save(registro);
+      await registrarEvento({
+        nivel: "error", tipo: "pedido_vencido", shopifyOrderId: registro.shopifyOrderId,
+        mensaje: registro.lastResponse,
+      });
       return registro;
     }
 
@@ -255,10 +287,18 @@ export class OrderService {
       registro.confirmedAt = new Date();
       registro.ctStatus = respuesta?.okReference ?? registro.ctStatus;
       registro.lastResponse = JSON.stringify(respuesta);
+      await registrarEvento({
+        tipo: "pedido_confirmado", shopifyOrderId: registro.shopifyOrderId,
+        mensaje: `CT confirmó el pedido ${registro.ctOrderId}`,
+      });
     } catch (e) {
       // El pedido EXISTE en CT; sólo no se pudo confirmar todavía. Se queda
       // en "sent" para que el job lo reintente antes del vencimiento.
       registro.lastResponse = `Confirmación fallida: ${(e as Error).message}`;
+      await registrarEvento({
+        nivel: "aviso", tipo: "confirmacion_fallida", shopifyOrderId: registro.shopifyOrderId,
+        mensaje: `Intento ${registro.confirmAttempts} de confirmar ${registro.ctOrderId}: ${(e as Error).message}`,
+      });
     }
     await this.ordenes.save(registro);
     return registro;
@@ -286,10 +326,14 @@ export class OrderService {
           ? (resultado.confirmDeadline.getTime() - ahora) / 3_600_000
           : Number.POSITIVE_INFINITY;
         if (horas <= 6) {
-          porVencer.push(
+          const aviso =
             `${resultado.shopifyOrderName ?? resultado.shopifyOrderId} ` +
-            `(CT ${resultado.ctOrderId}) vence en ${horas.toFixed(1)} h`
-          );
+            `(CT ${resultado.ctOrderId}) vence en ${horas.toFixed(1)} h`;
+          porVencer.push(aviso);
+          await registrarEvento({
+            nivel: "error", tipo: "pedido_por_vencer",
+            shopifyOrderId: resultado.shopifyOrderId, mensaje: aviso,
+          });
         }
       }
     }

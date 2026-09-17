@@ -118,6 +118,13 @@ async function escenario(nombre, puerto) {
 
     const todas = await pedir("GET", "/orders");
     console.log(`registros en la base: ${todas.json?.total}`);
+
+    const bitacora = await pedir("GET", "/bitacora?limit=500");
+    const tipos = {};
+    for (const e of bitacora.json?.eventos ?? []) tipos[e.tipo] = (tipos[e.tipo] ?? 0) + 1;
+    console.log(`bitácora -> ${bitacora.status} ${JSON.stringify(tipos)}`);
+    const deOrden = await pedir("GET", "/bitacora?orden=9002");
+    console.log(`bitácora de 9002: ${(deOrden.json?.eventos ?? []).map((e) => `${e.nivel}:${e.tipo}`).reverse().join(" > ")}`);
   } finally {
     if (process.platform === "win32") {
       await new Promise((r) => spawn("taskkill", ["/pid", String(proc.pid), "/T", "/F"], { shell: true }).on("exit", r));
