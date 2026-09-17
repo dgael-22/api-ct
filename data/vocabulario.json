@@ -1,0 +1,343 @@
+{
+  "orden_clases": [
+    "marca",
+    "genero",
+    "etapa",
+    "tipo",
+    "silueta",
+    "categoria",
+    "corte",
+    "altura",
+    "cierre",
+    "uso",
+    "material",
+    "temporada",
+    "estado",
+    "campana",
+    "color"
+  ],
+  "clases": {
+    "marca": [
+      "Flexi",
+      "Quirelli",
+      "Coqueta",
+      "Audaz",
+      "Procliff",
+      "SCHU",
+      "Flexi Country",
+      "Flexi Pro",
+      "Apple",
+      "Samsung",
+      "Hisense",
+      "LG",
+      "Motorola",
+      "Honor",
+      "Lenovo",
+      "HP",
+      "TCL",
+      "Daewoo",
+      "Epson",
+      "Nintendo",
+      "PlayStation",
+      "Wowdefu",
+      "Whirlpool",
+      "Midea",
+      "Mirage",
+      "Spring Air",
+      "Goodyear",
+      "Benelli"
+    ],
+    "genero": [
+      "Dama",
+      "Caballero",
+      "Niña",
+      "Niño",
+      "Unisex"
+    ],
+    "etapa": [
+      "Primeros Pasos",
+      "Infantil",
+      "Escolar"
+    ],
+    "tipo": [
+      "Calzado",
+      "Accesorios",
+      "Ropa",
+      "Electrónica",
+      "Electrodomésticos",
+      "Hogar",
+      "Papelería",
+      "Automotriz",
+      "Tarjeta de Regalo"
+    ],
+    "silueta": [
+      "Botas y Botines",
+      "Tenis",
+      "Sandalias",
+      "Mocasines",
+      "Flats y Balerinas",
+      "Zapatos",
+      "Cinturones",
+      "Carteras y Monederos",
+      "Bolsas y Mochilas",
+      "Calcetines",
+      "Gorras",
+      "Billeteras y Tarjeteros",
+      "Agujetas",
+      "Plantillas",
+      "Cuidado del Calzado",
+      "Coleccionables"
+    ],
+    "categoria": [
+      "Playeras y Blusas",
+      "Shorts y Pantalones",
+      "Chamarras",
+      "Vestidos",
+      "Conjuntos",
+      "Overoles",
+      "Trajes de Baño",
+      "Pantallas y TV",
+      "Celulares",
+      "Audio",
+      "Cómputo",
+      "Impresión",
+      "Relojes y Wearables",
+      "Consolas y Videojuegos",
+      "Refrigeración",
+      "Lavado",
+      "Estufas y Microondas",
+      "Cocina Pequeña",
+      "Climatización",
+      "Batería de Cocina",
+      "Descanso",
+      "Llantas",
+      "Motos y Bicicletas"
+    ],
+    "corte": [
+      "Choclo"
+    ],
+    "altura": [
+      "Tacón"
+    ],
+    "cierre": [
+      "Slip On",
+      "Velcro",
+      "Agujetas",
+      "Hebilla",
+      "Pulsera"
+    ],
+    "uso": [
+      "Casual",
+      "De Vestir",
+      "Confort",
+      "Deportivo",
+      "Outdoor",
+      "Urbano",
+      "Servicio Clínico",
+      "Seguridad Industrial",
+      "Universitario"
+    ],
+    "material": [
+      "Piel",
+      "Tejido",
+      "Textil"
+    ],
+    "temporada": [
+      "PV15",
+      "PV16",
+      "PV17",
+      "PV18",
+      "PV19",
+      "PV20",
+      "PV21",
+      "PV22",
+      "PV23",
+      "PV24",
+      "PV25",
+      "PV26",
+      "OI15",
+      "OI16",
+      "OI17",
+      "OI18",
+      "OI19",
+      "OI20",
+      "OI21",
+      "OI22",
+      "OI23",
+      "OI24",
+      "OI25",
+      "OI26"
+    ],
+    "estado": [
+      "Vigente",
+      "Outlet",
+      "Descontinuado"
+    ],
+    "campana": [
+      "Hot Sale",
+      "Regreso a Clases",
+      "Productos Exclusivos"
+    ],
+    "color": [
+      "Negro",
+      "Café",
+      "Tan",
+      "Blanco",
+      "Gris",
+      "Marino",
+      "Chocolate",
+      "Taupe",
+      "Vino",
+      "Beige",
+      "Multicolor",
+      "Nude",
+      "Azul",
+      "Cognac",
+      "Incoloro",
+      "Nogal",
+      "Rojo",
+      "Rosa",
+      "Arena",
+      "Brandy",
+      "Verde Olivo",
+      "Marrón",
+      "Crema",
+      "Moka",
+      "Capuccino",
+      "Oporto"
+    ]
+  },
+  "metafields": {
+    "genero": {
+      "nombre": "Género",
+      "clases": [
+        "genero"
+      ],
+      "valores": [
+        "Dama",
+        "Caballero",
+        "Niña",
+        "Niño",
+        "Unisex"
+      ]
+    },
+    "etapa": {
+      "nombre": "Etapa",
+      "clases": [
+        "etapa"
+      ],
+      "valores": [
+        "Primeros Pasos",
+        "Infantil",
+        "Escolar"
+      ]
+    },
+    "categoria": {
+      "nombre": "Categoría",
+      "clases": [
+        "silueta",
+        "categoria"
+      ],
+      "valores": [
+        "Botas y Botines",
+        "Tenis",
+        "Sandalias",
+        "Mocasines",
+        "Flats y Balerinas",
+        "Zapatos",
+        "Cinturones",
+        "Carteras y Monederos",
+        "Bolsas y Mochilas",
+        "Calcetines",
+        "Gorras",
+        "Billeteras y Tarjeteros",
+        "Agujetas",
+        "Plantillas",
+        "Cuidado del Calzado",
+        "Coleccionables",
+        "Playeras y Blusas",
+        "Shorts y Pantalones",
+        "Chamarras",
+        "Vestidos",
+        "Conjuntos",
+        "Overoles",
+        "Trajes de Baño",
+        "Pantallas y TV",
+        "Celulares",
+        "Audio",
+        "Cómputo",
+        "Impresión",
+        "Relojes y Wearables",
+        "Consolas y Videojuegos",
+        "Refrigeración",
+        "Lavado",
+        "Estufas y Microondas",
+        "Cocina Pequeña",
+        "Climatización",
+        "Batería de Cocina",
+        "Descanso",
+        "Llantas",
+        "Motos y Bicicletas"
+      ]
+    },
+    "ocasion": {
+      "nombre": "Ocasión",
+      "clases": [
+        "uso"
+      ],
+      "valores": [
+        "Casual",
+        "De Vestir",
+        "Confort",
+        "Deportivo",
+        "Outdoor",
+        "Urbano",
+        "Servicio Clínico",
+        "Seguridad Industrial",
+        "Universitario"
+      ]
+    },
+    "cierre": {
+      "nombre": "Cierre",
+      "clases": [
+        "cierre"
+      ],
+      "valores": [
+        "Slip On",
+        "Velcro",
+        "Agujetas",
+        "Hebilla",
+        "Pulsera"
+      ]
+    },
+    "altura": {
+      "nombre": "Tacón",
+      "clases": [
+        "altura"
+      ],
+      "valores": [
+        "Tacón"
+      ]
+    },
+    "corte": {
+      "nombre": "Corte",
+      "clases": [
+        "corte"
+      ],
+      "valores": [
+        "Choclo"
+      ]
+    },
+    "material": {
+      "nombre": "Material",
+      "clases": [
+        "material"
+      ],
+      "valores": [
+        "Piel",
+        "Tejido",
+        "Textil"
+      ]
+    }
+  }
+}
