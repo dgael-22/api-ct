@@ -61,6 +61,10 @@ export const env = {
      * En Railway conviene 15: CT cancela solo lo que no se confirma en 48 h,
      * y ahí no hay nadie corriendo el comando a mano.
      */
+    /** Minutos entre sincronizaciones de existencias CT -> Shopify. 0 = apagado. */
+    get minutosInventario(): number {
+      return Number(opcional("INVENTORY_SYNC_MINUTES", "0"));
+    },
     /** Días que se conservan los eventos de la bitácora. 0 = para siempre. */
     get diasBitacora(): number { return Number(opcional("BITACORA_DIAS", "365")); },
     get minutosConfirmacion(): number {
@@ -103,6 +107,8 @@ export const env = {
      * Si está, cada llamada lleva `x-proxy-key` y CT_BASE_URL apunta al proxy.
      */
     get proxyKey(): string { return opcional("CT_PROXY_KEY", ""); },
+    /** Pausa entre consultas de existencias en lote, para respetar el límite de CT. */
+    get pausaMs(): number { return Number(opcional("CT_PAUSA_MS", "1000")); },
     get email(): string { return requerida("CT_EMAIL"); },
     get cliente(): string { return requerida("CT_CLIENTE"); },
     get rfc(): string { return requerida("CT_RFC"); },

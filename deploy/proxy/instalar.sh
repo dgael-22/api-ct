@@ -23,8 +23,13 @@ echo "==> Actualizaciones de seguridad automáticas"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -q
 apt-get upgrade -yq
-apt-get install -yq unattended-upgrades ufw curl gnupg debian-keyring debian-archive-keyring apt-transport-https
+apt-get install -yq unattended-upgrades ufw fail2ban curl gnupg debian-keyring debian-archive-keyring apt-transport-https
 dpkg-reconfigure -f noninteractive unattended-upgrades
+# Reinicia sola si una actualización lo pide: 09:00 UTC = 3:00 en CDMX.
+cat > /etc/apt/apt.conf.d/52-reinicio-automatico <<'EOF'
+Unattended-Upgrade::Automatic-Reboot "true";
+Unattended-Upgrade::Automatic-Reboot-Time "09:00";
+EOF
 
 echo "==> SSH sólo con llave"
 cat > /etc/ssh/sshd_config.d/10-solo-llave.conf <<'EOF'
@@ -33,6 +38,16 @@ KbdInteractiveAuthentication no
 PermitRootLogin prohibit-password
 EOF
 systemctl reload ssh
+
+echo "==> fail2ban: bloquea IPs que insisten en SSH"
+systemctl enable --now fail2ban
+
+echo "==> Agente de métricas de DigitalOcean (gráficas y alertas en el panel)"
+if ! systemctl is-active --quiet do-agent; then
+  if ! curl -fsSL https://repos.insights.digitalocean.com/install.sh | bash; then
+    echo "   (no se pudo instalar do-agent; no afecta al proxy)"
+  fi
+fi
 
 echo "==> Firewall: 22, 80 y 443"
 ufw allow OpenSSH

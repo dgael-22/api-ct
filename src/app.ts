@@ -25,6 +25,7 @@ import express, { NextFunction, Request, Response } from "express";
 import { env, estaDefinida, FaltaConfiguracion } from "./config/env";
 import { esPostgres, inicializarBd, repositorios } from "./data-source";
 import { iniciarConfirmacionAutomatica } from "./jobs/confirmScheduler";
+import { iniciarSincronizacionInventario } from "./jobs/inventoryScheduler";
 import { requerirClaveAdmin } from "./middleware/autenticacion";
 import { depurarBitacora, registrarEvento } from "./services/bitacora";
 import { normalizarVariante } from "./entities/ProductMapping";
@@ -76,6 +77,7 @@ app.get("/health", (_peticion: Request, respuesta: Response) => {
     baseDeDatos: esPostgres() ? "postgres" : "sqlite",
     urlPublica: env.app.baseUrl || "(sin definir)",
     confirmacionAutomaticaMin: env.app.minutosConfirmacion,
+    inventarioAutomaticoMin: env.app.minutosInventario,
   };
 
   // En modo simulado las credenciales de CT no hacen falta: no se usan.
@@ -301,6 +303,7 @@ export async function arrancar(): Promise<void> {
       console.log(`Webhook para Shopify:  ${publica}/webhooks/shopify/orders-paid`);
     }
     iniciarConfirmacionAutomatica();
+    iniciarSincronizacionInventario();
     advertirSiSimulado();
     void registrarEvento({ tipo: "arranque", mensaje: `Servicio iniciado (CT ${env.ct.modo})` });
   });

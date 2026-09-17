@@ -19,6 +19,7 @@ import { CtClient, DetalleExistencia, ErrorCt, PedidoCt, RespuestaPedidoCt } fro
 import { CtSimulado, Escenario } from "../services/CtSimulado";
 import { crearClienteCt, reiniciarClienteCt } from "../services/ctFactory";
 import { normalizarVariante } from "../entities/ProductMapping";
+import { InventorySyncService } from "../services/InventorySyncService";
 import { OrdenShopify, OrderService } from "../services/OrderService";
 import type { ShopifyClient } from "../services/ShopifyClient";
 
@@ -322,6 +323,26 @@ test("sin CT_PROXY_KEY no se manda x-proxy-key (llamada directa a CT)", async ()
     await new CtClient(url).existenciaPorAlmacen("ACC1");
     assert.equal(recibidas[0]["x-proxy-key"], undefined);
   });
+});
+
+// ------------------------------------------------------------- existencias ---
+
+test("sincronizar existencias: si CT responde 429 se detiene la pasada", async () => {
+  let consultas = 0;
+  const ct = new (class extends CtSimulado {
+    override async existenciaPorAlmacen(): Promise<never> {
+      consultas++;
+      throw new ErrorCt("CT respondió 429", 429, null, false);
+    }
+  })("ok");
+  const mapeos = new RepoFalso<any>();
+  for (const v of ["1", "2", "3"]) await confirmarMapeo(mapeos, `SKU-${v}`, v);
+  const servicio = new InventorySyncService(ct, shopify, mapeos as any);
+
+  const resultados = await servicio.sincronizarConfirmados();
+  assert.equal(consultas, 1, "no insiste después del 429");
+  assert.equal(resultados.length, 1);
+  assert.match(resultados[0].motivo ?? "", /2 pendientes/);
 });
 
 // --------------------------------------------------------------- bitácora ---

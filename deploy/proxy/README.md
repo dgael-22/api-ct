@@ -58,10 +58,39 @@ curl -i -H "X-Proxy-Key: LA_CLAVE" https://IP-CON-GUIONES.sslip.io/pedido/listar
 # responde CT (401 mientras no haya token): el proxy sí reenvía
 ```
 
+## Seguridad
+
+DigitalOcean **por defecto** sólo da: red con protección DDoS básica, la llave
+SSH que elegiste y el sistema recién instalado. **No** activa firewall,
+actualizaciones automáticas ni bloqueo de intentos. Eso lo pone `instalar.sh`:
+
+| Capa | Qué hace | Quién |
+|---|---|---|
+| SSH sólo con llave | Sin contraseñas: nadie entra adivinando | `instalar.sh` |
+| fail2ban | Bloquea IPs que insisten en SSH | `instalar.sh` |
+| Firewall (ufw) | Sólo abre 22, 80 y 443 | `instalar.sh` |
+| Actualizaciones automáticas | Parches de seguridad diarios; reinicia a las 3:00 (CDMX) si hace falta | `instalar.sh` |
+| HTTPS | Certificado gratuito que Caddy renueva solo | `instalar.sh` |
+| Clave del proxy | Sin `X-Proxy-Key` correcta: 403. Nadie más usa tu IP | `instalar.sh` |
+| Métricas | Gráficas de CPU, memoria y disco en el panel | `instalar.sh` (do-agent) |
+
+Tú, en el panel de DigitalOcean:
+
+1. **Activa 2FA** en tu cuenta (Settings → Security). Es lo más importante:
+   quien entre a tu cuenta puede borrar el Droplet y su IP.
+2. **Cloud Firewall** (gratis), segunda capa por fuera del servidor:
+   Networking → Firewalls → Create. Entrada: SSH (22), HTTP (80), HTTPS (443).
+   Salida: todo. Aplícalo al Droplet `schu-ct-proxy`.
+3. **Alerta de monitoreo**: Monitoring → Create alert → CPU > 80 % por 5 min
+   (y opcionalmente "Droplet down"), con aviso a tu correo.
+4. **Alerta de facturación**: Billing → Billing alerts → $10 USD.
+
+Respaldos del Droplet no hacen falta: no guarda datos y se reinstala con el script.
+
 ## Mantenimiento
 
-- Las actualizaciones de seguridad se instalan solas. Reinicia el Droplet de vez
-  en cuando si DigitalOcean lo sugiere (la IP se conserva).
+- Las actualizaciones de seguridad se instalan solas y el servidor se reinicia
+  solo si lo necesita (la IP se conserva).
 - Logs del proxy: `/var/log/caddy/proxy-ct.log`.
 - Cambiar la clave: vuelve a correr `instalar.sh` con la nueva y actualiza
   `CT_PROXY_KEY` en Railway.

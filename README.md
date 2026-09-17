@@ -272,6 +272,14 @@ y errores. Filtros: `?orden=<id de Shopify>`, `?tipo=`, `?nivel=info|aviso|error
 Existe porque Railway Hobby borra los logs a los 7 días. Los eventos se
 conservan `BITACORA_DIAS` (365 por defecto) y nunca incluyen claves ni tokens.
 
+## Existencias automáticas
+
+Con `INVENTORY_SYNC_MINUTES` (0 = apagado) el servicio copia a Shopify la
+existencia de CT de todos los mapeos confirmados cada tantos minutos. Hace una
+consulta por producto separada por `CT_PAUSA_MS` (1000 por defecto) y, si CT
+responde 429, corta la pasada. El resumen queda en la bitácora
+(`inventario_sincronizado`). Manual: `POST /inventory/sync` o `npm run sync:inventory`.
+
 ## IP fija para CT
 
 CT sólo acepta llamadas desde IPs registradas. Con Railway Hobby las llamadas
@@ -315,6 +323,7 @@ DATABASE_URL=${{Postgres.DATABASE_URL}}
 DB_SSL=false
 NODE_ENV=production
 CONFIRM_INTERVAL_MINUTES=15
+INVENTORY_SYNC_MINUTES=60                # cuando haya mapeos confirmados
 ADMIN_API_KEY=...
 
 SHOPIFY_SHOP_DOMAIN=schuprueba-dev.myshopify.com

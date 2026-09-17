@@ -10,7 +10,7 @@
 import { Repository } from "typeorm";
 import { env } from "../config/env";
 import { ProductMapping } from "../entities/ProductMapping";
-import { ClienteCt } from "./CtClient";
+import { ClienteCt, ErrorCt } from "./CtClient";
 import { ShopifyClient } from "./ShopifyClient";
 
 /**
@@ -104,14 +104,18 @@ export class InventorySyncService {
     };
   }
 
-  /** Sincroniza todos los mapeos confirmados. */
-  async sincronizarConfirmados(limite?: number): Promise<ResultadoSincronizacion[]> {
+  /**
+   * Sincroniza todos los mapeos confirmados, con `pausaMs` entre uno y otro.
+   * Si CT responde 429 (demasiadas consultas) se detiene: seguir sólo empeora.
+   */
+  async sincronizarConfirmados(limite?: number, pausaMs = 0): Promise<ResultadoSincronizacion[]> {
     const mapeos = await this.mapeos.find({
       where: { status: "confirmed" },
       take: limite,
     });
     const resultados: ResultadoSincronizacion[] = [];
-    for (const mapeo of mapeos) {
+    for (const [i, mapeo] of mapeos.entries()) {
+      if (i > 0 && pausaMs > 0) await new Promise((r) => setTimeout(r, pausaMs));
       try {
         resultados.push(await this.sincronizarUno(mapeo));
       } catch (e) {
@@ -124,6 +128,11 @@ export class InventorySyncService {
           actualizado: false,
           motivo: `error: ${(e as Error).message}`,
         });
+        if (e instanceof ErrorCt && e.httpStatus === 429) {
+          resultados[resultados.length - 1].motivo +=
+            ` · CT limitó las consultas: se detuvo la pasada (${mapeos.length - i - 1} pendientes)`;
+          break;
+        }
       }
     }
     return resultados;
