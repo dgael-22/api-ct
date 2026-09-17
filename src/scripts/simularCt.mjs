@@ -2,7 +2,8 @@
  * src/scripts/simularCt.mjs
  * =========================
  * Paso 6: punta a punta contra el servidor de verdad con CT_MODO=simulado,
- * en los cuatro escenarios (ok, sin_stock, rechazo, caida).
+ * en los cuatro escenarios (ok, sin_stock, rechazo, caida), más CT_MODO=real
+ * SIN credenciales: lo que pasa hoy en producción mientras CT no las dé.
  *
  *   npm run simular:ct
  *
@@ -28,8 +29,13 @@ async function escenario(nombre, puerto) {
   const env = {
     ...process.env,
     PORT: String(puerto),
-    CT_MODO: "simulado",
+    CT_MODO: nombre === "real_sin_credenciales" ? "real" : "simulado",
     CT_SIMULADO_ESCENARIO: nombre,
+    // Para el modo real: sin credenciales, nada sale hacia CT.
+    CT_ACCESS_TOKEN: "",
+    CT_EMAIL: "replace_me",
+    CT_CLIENTE: "replace_me",
+    CT_RFC: "replace_me",
     DATABASE_URL: `sqlite:${bd}`,
     ADMIN_API_KEY: CLAVE,
     SHOPIFY_WEBHOOK_SECRET: SECRETO,
@@ -68,16 +74,18 @@ async function escenario(nombre, puerto) {
     }
     const salud = await pedir("GET", "/health");
     console.log(`\n=== escenario ${nombre} ===`);
-    console.log(`health: ${salud.status} ct=${JSON.stringify(salud.json?.ct ?? salud.json?.ctModo ?? "?")}`);
+    const ct = salud.json?.configuracion?.ct ?? {};
+    console.log(`health: ${salud.status} modo=${ct.modo} credenciales=${ct.credenciales} faltantes=${JSON.stringify(salud.json?.faltantes)}`);
 
     const sinClave = await fetch(base + "/orders");
     console.log(`GET /orders sin x-api-key -> ${sinClave.status}`);
 
+    // Como viene del CSV: variante en formato gid y sin SKU.
     const mapeo = await pedir("POST", "/mappings", {
-      shopifyVariantId: "111", shopifySku: "SCHU-001", ctSku: "ACCCTX010",
+      shopifyVariantId: "gid://shopify/ProductVariant/111", ctSku: "ACCCTX010",
       status: "confirmed", confirmedBy: "simulacion",
     });
-    console.log(`alta de mapeo confirmado -> ${mapeo.status}`);
+    console.log(`alta de mapeo (gid, sin SKU) -> ${mapeo.status} variante=${mapeo.json?.shopifyVariantId}`);
 
     const orden = (id, variante, sku) => ({
       id, name: `#SIM${id}`, currency: "MXN",
@@ -86,14 +94,23 @@ async function escenario(nombre, puerto) {
         province: "CDMX", zip: "01000", phone: "5555555555", company: "Centro" },
     });
 
-    console.log(`webhook con firma falsa -> ${(await webhook(orden(9001, 111, "SCHU-001"), true)).status}`);
-    console.log(`webhook orden mapeada   -> ${(await webhook(orden(9001, 111, "SCHU-001"))).status}`);
-    console.log(`webhook repetido        -> ${(await webhook(orden(9001, 111, "SCHU-001"))).status}`);
+    console.log(`webhook con firma falsa -> ${(await webhook(orden(9001, 111, null), true)).status}`);
+    console.log(`webhook orden mapeada   -> ${(await webhook(orden(9001, 111, null))).status}`);
+    console.log(`webhook repetido        -> ${(await webhook(orden(9001, 111, null))).status}`);
     console.log(`webhook sin mapeo       -> ${(await webhook(orden(9002, 999, "SIN-MAPEO"))).status}`);
     await esperar(2500);
 
     console.log(`orden 9001: ${resumen((await pedir("GET", "/orders/9001")).json)}`);
     console.log(`orden 9002: ${resumen((await pedir("GET", "/orders/9002")).json)}`);
+
+    // Se confirma el mapeo que faltaba y se reintenta la orden detenida.
+    await pedir("POST", "/mappings", {
+      shopifyVariantId: "999", ctSku: "ACCCTX020", status: "confirmed", confirmedBy: "simulacion",
+    });
+    const reintento = await pedir("POST", "/orders/9002/retry");
+    console.log(`POST /orders/9002/retry -> ${reintento.status} ${resumen(reintento.json)}`);
+    const noReintentable = await pedir("POST", "/orders/9001/retry");
+    console.log(`POST /orders/9001/retry -> ${noReintentable.status} ${noReintentable.json?.error ?? resumen(noReintentable.json)}`);
 
     const conf = await pedir("POST", "/orders/confirm");
     console.log(`POST /orders/confirm -> ${conf.status} ${JSON.stringify(conf.json)}`);
@@ -102,11 +119,17 @@ async function escenario(nombre, puerto) {
     const todas = await pedir("GET", "/orders");
     console.log(`registros en la base: ${todas.json?.total}`);
   } finally {
-    await new Promise((r) => spawn("taskkill", ["/pid", String(proc.pid), "/T", "/F"], { shell: true }).on("exit", r));
+    if (process.platform === "win32") {
+      await new Promise((r) => spawn("taskkill", ["/pid", String(proc.pid), "/T", "/F"], { shell: true }).on("exit", r));
+    } else {
+      proc.kill();
+    }
     const lineas = log.split("\n").filter((l) => /webhook|simulad|error/i.test(l)).slice(0, 8);
     if (lineas.length) console.log("log del servidor:\n  " + lineas.join("\n  "));
   }
 }
 
 let puerto = 3911;
-for (const e of ["ok", "sin_stock", "rechazo", "caida"]) await escenario(e, puerto++);
+for (const e of ["ok", "sin_stock", "rechazo", "caida", "real_sin_credenciales"]) {
+  await escenario(e, puerto++);
+}

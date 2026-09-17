@@ -45,9 +45,22 @@ Para operar de verdad: `cp .env.example .env` y llenar los valores.
 | POST | `/mappings` | alta o confirmación de un mapping | RF-01 |
 | POST | `/inventory/sync` | copia a Shopify la disponibilidad de CT | RF-02, RF-07 |
 | POST | `/webhooks/shopify/orders-paid` | recibe la orden pagada | RF-03 |
-| GET | `/orders` | órdenes y su relación con CT | RF-05 |
+| GET | `/orders` | órdenes y su relación con CT (`?status=blocked`) | RF-05 |
 | POST | `/orders/confirm` | confirma en CT los pedidos pendientes | — |
+| POST | `/orders/:shopifyOrderId/retry` | reprocesa una orden `blocked` | RF-04 |
 | GET | `/orders/:shopifyOrderId` | una orden | RF-05 |
+
+Todos menos `/health` y el webhook piden la cabecera `x-api-key`.
+
+**El mapping se busca por variante**, que siempre viene en la orden. El SKU es
+opcional (hay artículos sin él) y sólo se usa si una línea no trae variante.
+`shopifyVariantId` se acepta como número o como `gid://shopify/ProductVariant/…`.
+
+**Reintentar es manual.** Una orden `blocked` nunca llegó a CT: cuando se
+resuelve la causa (se confirma el mapping, llegan las credenciales) se
+reprocesa con `POST /orders/:id/retry`, con la copia de la orden que se guardó
+al recibirla. No hay reintento automático porque en ese lapso alguien pudo
+haberla surtido por otro lado.
 
 ### Confirmar un mapping es un acto humano
 
@@ -108,7 +121,7 @@ Estados de una orden:
 
 | Situación | Estado de la orden | Comportamiento |
 |---|---|---|
-| SKU sin mapping confirmado | se detiene antes de llamar a CT | no se envía nada |
+| Variante sin mapping confirmado | se detiene antes de llamar a CT | no se envía nada |
 | CT rechaza o no hay stock | `rejected` | no se marca surtida ni se reintenta |
 | Respuesta incierta (timeout) | `uncertain` | **nadie reintenta**: primero se verifica en `/pedido/listar` |
 

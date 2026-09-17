@@ -22,6 +22,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { parse } from "csv-parse/sync";
 import { inicializarBd, repositorios } from "../data-source";
+import { normalizarVariante } from "../entities/ProductMapping";
 
 const ruta = process.argv[2];
 
@@ -52,7 +53,7 @@ async function principal(): Promise<void> {
   let omitidos = 0;
 
   for (const fila of filas) {
-    const variantId = (fila["shopifyvariantid"] ?? "").trim();
+    const variantId = normalizarVariante(fila["shopifyvariantid"]);
     const shopifySku = (fila["shopifysku"] ?? "").trim();
     const ctSku = (fila["ctsku"] ?? "").trim();
 

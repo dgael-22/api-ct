@@ -80,6 +80,10 @@ export class OrderMapping {
   @Column({ type: "text", nullable: true })
   lastResponse!: string | null;
 
+  /** La orden de Shopify ya reducida (OrdenShopify). Permite reintentar las "blocked". */
+  @Column({ type: "text", nullable: true })
+  orderPayload!: string | null;
+
   @CreateDateColumn()
   createdAt!: Date;
 

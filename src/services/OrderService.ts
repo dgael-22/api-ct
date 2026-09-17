@@ -15,7 +15,7 @@
 import { Repository } from "typeorm";
 import { env } from "../config/env";
 import { OrderMapping } from "../entities/OrderMapping";
-import { ProductMapping } from "../entities/ProductMapping";
+import { normalizarVariante, ProductMapping } from "../entities/ProductMapping";
 import { ClienteCt, EnvioCt, ErrorCt, LineaPedidoCt, PedidoCt } from "./CtClient";
 import { InventorySyncService } from "./InventorySyncService";
 import { ShopifyClient } from "./ShopifyClient";
@@ -84,6 +84,33 @@ export class OrderService {
     return Number(digitos.slice(-9));
   }
 
+  /**
+   * Vuelve a procesar una orden "blocked" con la copia guardada al recibirla.
+   * Cualquier otro estado se rechaza: "uncertain" se verifica en CT a mano y
+   * lo demás ya tuvo respuesta de CT.
+   */
+  async reintentar(
+    shopifyOrderId: string
+  ): Promise<ResultadoOrden | { error: string; detalle: string }> {
+    const registro = await this.ordenes.findOne({ where: { shopifyOrderId } });
+    if (!registro) {
+      return { error: "orden_no_registrada", detalle: `No hay registro de la orden ${shopifyOrderId}.` };
+    }
+    if (registro.status !== "blocked") {
+      return {
+        error: "estado_no_reintentable",
+        detalle: `La orden está en "${registro.status}". Sólo se reintentan las "blocked".`,
+      };
+    }
+    if (!registro.orderPayload) {
+      return {
+        error: "sin_copia_de_la_orden",
+        detalle: "La orden se recibió antes de que se guardara su contenido. Reenvía el webhook desde Shopify.",
+      };
+    }
+    return this.procesar(JSON.parse(registro.orderPayload) as OrdenShopify);
+  }
+
   /** Flujo completo de una orden elegible. */
   async procesar(orden: OrdenShopify): Promise<ResultadoOrden> {
     const registro = await this.registrar(orden);
@@ -115,6 +142,8 @@ export class OrderService {
       producto: productos,
     };
     registro.requestPayload = JSON.stringify(payload);
+    // Un reintento no debe arrastrar el motivo de la detención anterior.
+    registro.ctStatus = null;
     await this.ordenes.save(registro);
 
     try {
@@ -282,18 +311,30 @@ export class OrderService {
     const existente = await this.ordenes.findOne({
       where: { shopifyOrderId: orden.id },
     });
-    if (existente) return existente;
+    if (existente) {
+      // Órdenes anteriores a la columna: se completa para poder reintentarlas.
+      if (!existente.orderPayload) {
+        existente.orderPayload = JSON.stringify(orden);
+        await this.ordenes.save(existente);
+      }
+      return existente;
+    }
 
     const registro = this.ordenes.create({
       shopifyOrderId: orden.id,
       shopifyOrderName: orden.name ?? null,
       externalReference: this.calcularReferencia(orden.id),
       status: "received",
+      orderPayload: JSON.stringify(orden),
     });
     return this.ordenes.save(registro);
   }
 
-  /** RF-04. Cambia los identificadores de Shopify por los de CT. */
+  /**
+   * RF-04. Cambia los identificadores de Shopify por los de CT.
+   * El mapeo se busca por VARIANTE, que siempre viene en la orden; el SKU es
+   * sólo el respaldo para una línea sin variante (hay artículos sin SKU).
+   */
   private async traducirLineas(
     lineas: LineaOrden[]
   ): Promise<{ productos: LineaPedidoCt[]; clavesCt: string[] }> {
@@ -301,15 +342,28 @@ export class OrderService {
     const clavesCt: string[] = [];
 
     for (const linea of lineas) {
-      if (!linea.sku) {
-        throw new ErrorDetencion("Hay una línea de la orden sin SKU", "sku_vacio");
+      let mapeo: ProductMapping | null;
+      let producto: string;
+      if (linea.variantId) {
+        const variante = normalizarVariante(linea.variantId);
+        producto = `La variante ${variante}` + (linea.sku ? ` (SKU ${linea.sku})` : "");
+        mapeo = await this.mapeos.findOne({
+          where: { shopifyVariantId: variante, status: "confirmed" },
+        });
+      } else if (linea.sku) {
+        producto = `El SKU ${linea.sku}`;
+        mapeo = await this.mapeos.findOne({
+          where: { shopifySku: linea.sku, status: "confirmed" },
+        });
+      } else {
+        throw new ErrorDetencion(
+          "Hay una línea de la orden sin variante ni SKU: no se puede identificar el producto.",
+          "linea_sin_identificador"
+        );
       }
-      const mapeo = await this.mapeos.findOne({
-        where: { shopifySku: linea.sku, status: "confirmed" },
-      });
       if (!mapeo) {
         throw new ErrorDetencion(
-          `El SKU ${linea.sku} no tiene mapeo confirmado contra CT. No se envía el pedido.`,
+          `${producto} no tiene mapeo confirmado contra CT. No se envía el pedido.`,
           "mapeo_no_confirmado"
         );
       }
@@ -337,9 +391,11 @@ export class OrderService {
     try {
       [detalle] = await this.ct.detalle(clave, env.ct.almacen);
     } catch (e) {
+      // Sin token (p. ej. aún sin credenciales de CT) la consulta ni salió.
+      const sinConexion = e instanceof ErrorCt && e.sinEnviar;
       throw new ErrorDetencion(
         `No se pudo consultar el precio de ${clave} en CT. No se envía el pedido. ${(e as Error).message}`,
-        "precio_no_disponible"
+        sinConexion ? "ct_sin_conexion" : "precio_no_disponible"
       );
     }
     if (!detalle || !(Number(detalle.precio) > 0) || !detalle.moneda) {

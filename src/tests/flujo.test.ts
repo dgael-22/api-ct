@@ -17,6 +17,7 @@ import { extraerOrden, firmaValida } from "../routes/shopifyWebhooks";
 import { DetalleExistencia, ErrorCt, PedidoCt, RespuestaPedidoCt } from "../services/CtClient";
 import { CtSimulado, Escenario } from "../services/CtSimulado";
 import { crearClienteCt, reiniciarClienteCt } from "../services/ctFactory";
+import { normalizarVariante } from "../entities/ProductMapping";
 import { OrdenShopify, OrderService } from "../services/OrderService";
 import type { ShopifyClient } from "../services/ShopifyClient";
 
@@ -65,13 +66,16 @@ function montar(ct: CtSimulado) {
   return { ordenes, mapeos, servicio };
 }
 
-async function confirmarMapeo(mapeos: RepoFalso<any>, sku = "SKU-1"): Promise<void> {
-  await mapeos.save(mapeos.create({ shopifySku: sku, ctSku: `CT-${sku}`, status: "confirmed" }));
+/** Mapeo confirmado de la variante "1" (como lo guardan /mappings y el import). */
+async function confirmarMapeo(mapeos: RepoFalso<any>, sku = "SKU-1", variante = "1"): Promise<void> {
+  await mapeos.save(mapeos.create({
+    shopifyVariantId: variante, shopifySku: sku, ctSku: `CT-${sku}`, status: "confirmed",
+  }));
 }
 
-const orden = (id: string, sku = "SKU-1"): OrdenShopify => ({
+const orden = (id: string, sku: string | null = "SKU-1", variantId: string | null = "1"): OrdenShopify => ({
   id, name: `#${id}`,
-  lineas: [{ sku, variantId: "1", cantidad: 1, precio: 100, moneda: "MXN" }],
+  lineas: [{ sku, variantId, cantidad: 1, precio: 100, moneda: "MXN" }],
 });
 
 /** CT simulado cuyo crearPedido falla con el error que se le indique. */
@@ -137,6 +141,63 @@ test("detención 1: sin mapeo queda 'blocked' con motivo, y se reintenta al conf
   await confirmarMapeo(mapeos);
   const reintento = await servicio.procesar(orden("2001"));
   assert.equal(reintento.registro.status, "accepted");
+});
+
+// ------------------------------------------------------------ variantes ---
+
+test("el ID de variante se normaliza: gid y número son lo mismo", () => {
+  assert.equal(normalizarVariante("gid://shopify/ProductVariant/60133312561233"), "60133312561233");
+  assert.equal(normalizarVariante(60133312561233), "60133312561233");
+  assert.equal(normalizarVariante(" 42 "), "42");
+});
+
+test("el mapeo se busca por variante: un producto sin SKU sí se pide", async () => {
+  const { mapeos, servicio } = montar(new CtSimulado("ok"));
+  await confirmarMapeo(mapeos, "", "777");
+  const r = await servicio.procesar(orden("1101", null, "gid://shopify/ProductVariant/777"));
+  assert.equal(r.registro.status, "accepted");
+});
+
+test("la variante manda: otra variante con el mismo SKU no se confunde", async () => {
+  const { mapeos, servicio } = montar(new CtSimulado("ok"));
+  await confirmarMapeo(mapeos, "SKU-1", "1");
+  const r = await servicio.procesar(orden("1201", "SKU-1", "2"));
+  assert.equal(r.registro.status, "blocked");
+  assert.match(r.registro.lastResponse ?? "", /variante 2/);
+});
+
+test("sin variante se usa el SKU; sin ninguno de los dos se detiene", async () => {
+  const { mapeos, servicio } = montar(new CtSimulado("ok"));
+  await confirmarMapeo(mapeos);
+  assert.equal((await servicio.procesar(orden("1301", "SKU-1", null))).registro.status, "accepted");
+  const r = await servicio.procesar(orden("1302", null, null));
+  assert.equal(r.registro.status, "blocked");
+  assert.equal(r.registro.ctStatus, "linea_sin_identificador");
+});
+
+// ------------------------------------------------------------ reintento ---
+
+test("reintentar: una 'blocked' se reprocesa con la copia guardada", async () => {
+  const { mapeos, servicio, ordenes } = montar(new CtSimulado("ok"));
+  const r = await servicio.procesar(orden("1401"));
+  assert.equal(r.registro.status, "blocked");
+  assert.ok(ordenes.filas[0].orderPayload, "la orden quedó guardada");
+
+  await confirmarMapeo(mapeos);
+  const reintento = await servicio.reintentar("1401");
+  assert.ok(!("error" in reintento));
+  assert.equal(reintento.registro.status, "accepted");
+});
+
+test("reintentar: sólo 'blocked'; lo demás y lo inexistente se rechaza", async () => {
+  const { mapeos, servicio } = montar(new CtSimulado("ok"));
+  await confirmarMapeo(mapeos);
+  await servicio.procesar(orden("1402"));
+
+  const aceptada = await servicio.reintentar("1402");
+  assert.ok("error" in aceptada && aceptada.error === "estado_no_reintentable");
+  const noExiste = await servicio.reintentar("9999");
+  assert.ok("error" in noExiste && noExiste.error === "orden_no_registrada");
 });
 
 test("a CT viaja su precio y su moneda, no el precio de venta de Shopify", async () => {

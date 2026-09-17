@@ -14,6 +14,7 @@
  *   GET  /orders                              órdenes y su relación con CT
  *   GET  /orders/:shopifyOrderId              una orden
  *   POST /orders/confirm                      confirma en CT los pendientes
+ *   POST /orders/:shopifyOrderId/retry        reprocesa una orden "blocked"
  *   POST /webhooks/shopify/orders-paid        RF-03: la orden pagada
  *
  * /mappings, /inventory y /orders piden la cabecera x-api-key (ADMIN_API_KEY).
@@ -24,6 +25,7 @@ import { env, estaDefinida, FaltaConfiguracion } from "./config/env";
 import { esPostgres, inicializarBd, repositorios } from "./data-source";
 import { iniciarConfirmacionAutomatica } from "./jobs/confirmScheduler";
 import { requerirClaveAdmin } from "./middleware/autenticacion";
+import { normalizarVariante } from "./entities/ProductMapping";
 import { crearRutasWebhook } from "./routes/shopifyWebhooks";
 import { InventorySyncService } from "./services/InventorySyncService";
 import { OrderService } from "./services/OrderService";
@@ -116,10 +118,12 @@ app.post("/mappings", async (peticion: Request, respuesta: Response) => {
   const { productos } = repositorios();
   const cuerpo = peticion.body ?? {};
 
-  if (!cuerpo.shopifyVariantId || !cuerpo.shopifySku || !cuerpo.ctSku) {
+  // El SKU de Shopify es opcional: hay artículos dados de alta sin él y el
+  // pedido busca el mapeo por variante.
+  if (!cuerpo.shopifyVariantId || !cuerpo.ctSku) {
     respuesta.status(400).json({
       error: "faltan_campos",
-      requeridos: ["shopifyVariantId", "shopifySku", "ctSku"],
+      requeridos: ["shopifyVariantId", "ctSku"],
     });
     return;
   }
@@ -131,16 +135,15 @@ app.post("/mappings", async (peticion: Request, respuesta: Response) => {
     return;
   }
 
-  const existente = await productos.findOne({
-    where: { shopifyVariantId: String(cuerpo.shopifyVariantId) },
-  });
+  const variante = normalizarVariante(cuerpo.shopifyVariantId);
+  const existente = await productos.findOne({ where: { shopifyVariantId: variante } });
   const mapeo = existente ?? productos.create({
-    shopifyVariantId: String(cuerpo.shopifyVariantId),
-    shopifySku: String(cuerpo.shopifySku),
+    shopifyVariantId: variante,
+    shopifySku: String(cuerpo.shopifySku ?? ""),
     ctSku: String(cuerpo.ctSku),
   });
 
-  mapeo.shopifySku = String(cuerpo.shopifySku);
+  mapeo.shopifySku = String(cuerpo.shopifySku ?? mapeo.shopifySku ?? "");
   mapeo.ctSku = String(cuerpo.ctSku);
   mapeo.ctProductId = cuerpo.ctProductId ? String(cuerpo.ctProductId) : mapeo.ctProductId ?? null;
   mapeo.partNumber = cuerpo.partNumber ? String(cuerpo.partNumber) : mapeo.partNumber ?? null;
@@ -179,7 +182,9 @@ app.post("/inventory/sync", async (peticion: Request, respuesta: Response, sigui
 
 app.get("/orders", async (peticion: Request, respuesta: Response) => {
   const { ordenes } = repositorios();
+  const estado = peticion.query.status as string | undefined;
   const registros = await ordenes.find({
+    where: estado ? { status: estado as never } : {},
     take: Number(peticion.query.limit ?? 50),
     order: { id: "DESC" },
   });
@@ -201,6 +206,31 @@ app.post("/orders/confirm", async (_peticion: Request, respuesta: Response, sigu
       new InventorySyncService(ct, shopify, productos)
     );
     respuesta.json(await servicio.confirmarPendientes());
+  } catch (e) {
+    siguiente(e);
+  }
+});
+
+/**
+ * Reprocesa una orden "blocked" (sin mapeo, sin precio o sin conexión con CT)
+ * con las líneas que se guardaron al recibirla. Es manual a propósito: entre
+ * el bloqueo y el reintento alguien pudo haberla surtido por otro lado.
+ */
+app.post("/orders/:shopifyOrderId/retry", async (peticion: Request, respuesta: Response, siguiente: NextFunction) => {
+  try {
+    const { ordenes, productos } = repositorios();
+    const ct = crearClienteCt();
+    const shopify = new ShopifyClient();
+    const servicio = new OrderService(
+      ct, shopify, ordenes, productos,
+      new InventorySyncService(ct, shopify, productos)
+    );
+    const resultado = await servicio.reintentar(String(peticion.params.shopifyOrderId));
+    if ("error" in resultado) {
+      respuesta.status(resultado.error === "orden_no_registrada" ? 404 : 409).json(resultado);
+      return;
+    }
+    respuesta.json(resultado.registro);
   } catch (e) {
     siguiente(e);
   }

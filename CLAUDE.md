@@ -30,13 +30,15 @@ Los scripts de Shopify son **idempotentes** y sin `--aplicar` sólo simulan. Man
 - **Ningún valor real vive en el código.** Todo sale de `.env`, que no entra a Git. `.env.example` lleva `replace_me` (ya pasó una vez y GitHub bloqueó el push).
 - **Código y comentarios en español.**
 - **`crearPedido` nunca reintenta.** Una conexión cortada no debe duplicar una compra.
+- **El mapeo se busca por variante** (`normalizarVariante`: gid o número). El SKU sólo es respaldo.
+- **Reintentar `blocked` es manual** (`POST /orders/:id/retry`), nunca automático: pudo surtirse por otro lado.
 - **`/mappings`, `/inventory` y `/orders` piden `x-api-key`** (`ADMIN_API_KEY`) y fallan cerrados sin ella. `/health` y el webhook (HMAC) no.
 
 ## Las tres detenciones del ETS
 
 Cuando el dato es ambiguo la respuesta correcta es **parar, no adivinar**:
 
-1. SKU sin mapeo confirmado → `blocked` con el motivo; no llega a CT y se puede reintentar. Igual si falla el token antes de enviar.
+1. Variante sin mapeo confirmado → `blocked` con el motivo; no llega a CT y se reintenta con `/retry`. Igual sin precio de CT o si falla el token antes de enviar (`ct_sin_conexion`).
 2. CT rechaza → `rejected`, con el motivo.
 3. Respuesta incierta (timeout, red o 5xx) → `uncertain` y **no se reintenta**. Reintentar a ciegas es como CT acaba cobrando dos veces.
 
@@ -74,6 +76,7 @@ src/
 
 - En Railway: `SHOPIFY_WEBHOOK_SECRET` (el client secret de la app) y `ADMIN_API_KEY`.
 - Dirección de envío: Shopify no tiene colonia; hoy sale de `company`. `tipoPago` y `cfdi` provisionales. Acordar con CT.
-- Mapeos: 88 candidatos en `data/candidatos-ct.csv` sin clave de CT. Hace falta el catálogo de CT.
+- Mapeos: 88 candidatos en `data/candidatos-ct.csv` sin clave de CT (48 sin SKU, ya no importa). Hace falta el catálogo de CT.
+- Producción puede ir en `CT_MODO=real` sin credenciales: toda orden queda `blocked` (`ct_sin_conexion`) y se reintenta al llegar.
 - Paso 6 hecho (17 sep): `npm run simular:ct` pasa los cuatro escenarios. No cubre las escrituras a Shopify.
 - Paso 7: CT real. Hace falta que un representante de CT dé `email`, `cliente` y `rfc` para `/cliente/token`.

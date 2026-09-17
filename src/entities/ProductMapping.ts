@@ -14,6 +14,16 @@ import {
 
 export type EstadoMapeo = "confirmed" | "pending" | "conflict";
 
+/**
+ * El ID de variante llega de dos formas: "gid://shopify/ProductVariant/123"
+ * (exportaciones y GraphQL) y "123" (webhook). Se guarda y se busca siempre
+ * como el número, para que las dos coincidan.
+ */
+export function normalizarVariante(id: string | number | null | undefined): string {
+  const texto = String(id ?? "").trim();
+  return texto.match(/(\d+)$/)?.[1] ?? texto;
+}
+
 @Entity({ name: "product_mapping" })
 export class ProductMapping {
   @PrimaryGeneratedColumn()
