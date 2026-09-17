@@ -97,8 +97,12 @@ export class CtSimulado implements ClienteCt {
     return { existencia_total: cantidad + Math.floor(cantidad / 2) };
   }
 
+  /**
+   * Sin simularCaida a propósito: el escenario "caida" reproduce la conexión
+   * que se corta DURANTE el pedido. Si fallara aquí, la orden se detendría
+   * antes de enviar y nunca se probaría la respuesta incierta.
+   */
   async detalle(codigo: string, almacen: string): Promise<DetalleExistencia[]> {
-    this.simularCaida();
     return [{
       precio: 100 + (this.base(codigo) % 900),
       moneda: "MXN",

@@ -25,6 +25,7 @@ export interface LineaOrden {
   sku: string | null;
   variantId: string | null;
   cantidad: number;
+  /** Precio de VENTA en Shopify. Sólo referencia: a CT viaja su propio precio. */
   precio: number;
   moneda: string;
 }
@@ -312,15 +313,42 @@ export class OrderService {
           "mapeo_no_confirmado"
         );
       }
+      // CT pide consultar precio y existencia antes de pedir, y el precio que
+      // viaja es el de CT (nuestro costo) en SU moneda, no el de venta en Shopify.
+      const { precio, moneda } = await this.precioCt(mapeo.ctSku);
       productos.push({
         cantidad: linea.cantidad,
         clave: mapeo.ctSku,
-        precio: linea.precio,
-        moneda: linea.moneda,
+        precio,
+        moneda,
       });
       clavesCt.push(mapeo.ctSku);
     }
     return { productos, clavesCt };
+  }
+
+  /**
+   * Precio vigente en CT del almacén configurado (GET /existencia/detalle).
+   * Si no se puede saber, la orden se detiene: todavía no salió nada a CT, así
+   * que es "blocked" y se puede reintentar, nunca "uncertain".
+   */
+  private async precioCt(clave: string): Promise<{ precio: number; moneda: string }> {
+    let detalle;
+    try {
+      [detalle] = await this.ct.detalle(clave, env.ct.almacen);
+    } catch (e) {
+      throw new ErrorDetencion(
+        `No se pudo consultar el precio de ${clave} en CT. No se envía el pedido. ${(e as Error).message}`,
+        "precio_no_disponible"
+      );
+    }
+    if (!detalle || !(Number(detalle.precio) > 0) || !detalle.moneda) {
+      throw new ErrorDetencion(
+        `CT no devolvió precio para ${clave} en el almacén ${env.ct.almacen}. No se envía el pedido.`,
+        "precio_no_disponible"
+      );
+    }
+    return { precio: Number(detalle.precio), moneda: detalle.moneda };
   }
 
   /** RF-06. Refleja en Shopify lo que dijo CT. Si falla, no rompe el flujo. */

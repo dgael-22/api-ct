@@ -14,7 +14,7 @@ import express from "express";
 
 import { requerirClaveAdmin } from "../middleware/autenticacion";
 import { extraerOrden, firmaValida } from "../routes/shopifyWebhooks";
-import { ErrorCt, PedidoCt, RespuestaPedidoCt } from "../services/CtClient";
+import { DetalleExistencia, ErrorCt, PedidoCt, RespuestaPedidoCt } from "../services/CtClient";
 import { CtSimulado, Escenario } from "../services/CtSimulado";
 import { crearClienteCt, reiniciarClienteCt } from "../services/ctFactory";
 import { OrdenShopify, OrderService } from "../services/OrderService";
@@ -80,6 +80,15 @@ class CtQueFalla extends CtSimulado {
   override async crearPedido(_p: PedidoCt): Promise<RespuestaPedidoCt> { throw this.error; }
 }
 
+/** CT simulado cuyo detalle (precio) falla o viene vacío. */
+class CtSinPrecio extends CtSimulado {
+  constructor(private readonly falla: boolean) { super("ok" as Escenario); }
+  override async detalle(): Promise<DetalleExistencia[]> {
+    if (this.falla) throw new ErrorCt("CT respondió 503 en GET /existencia/detalle", 503, null, true);
+    return [];
+  }
+}
+
 // ------------------------------------------------------------- webhook ---
 
 test("la firma del webhook se valida contra el cuerpo crudo", () => {
@@ -128,6 +137,31 @@ test("detención 1: sin mapeo queda 'blocked' con motivo, y se reintenta al conf
   await confirmarMapeo(mapeos);
   const reintento = await servicio.procesar(orden("2001"));
   assert.equal(reintento.registro.status, "accepted");
+});
+
+test("a CT viaja su precio y su moneda, no el precio de venta de Shopify", async () => {
+  const ct = new CtSimulado("ok");
+  const { mapeos, servicio } = montar(ct);
+  await confirmarMapeo(mapeos);
+  const [esperado] = await ct.detalle("CT-SKU-1", "01A");
+
+  const r = await servicio.procesar(orden("1501"));
+  const enviado = JSON.parse(r.registro.requestPayload ?? "{}") as PedidoCt;
+  assert.equal(enviado.producto[0].precio, esperado.precio);
+  assert.equal(enviado.producto[0].moneda, esperado.moneda);
+  assert.notEqual(enviado.producto[0].precio, 100, "no es el precio de Shopify");
+});
+
+test("sin precio de CT queda 'blocked' y no se envía el pedido", async () => {
+  for (const falla of [true, false]) {
+    const ct = new CtSinPrecio(falla);
+    const { mapeos, servicio } = montar(ct);
+    await confirmarMapeo(mapeos);
+    const r = await servicio.procesar(orden("1601"));
+    assert.equal(r.registro.status, "blocked");
+    assert.equal(r.registro.ctStatus, "precio_no_disponible");
+    assert.equal((await ct.listarPedidos() as unknown[]).length, 0, "no llegó nada a CT");
+  }
 });
 
 test("detención 2: rechazo y sin existencia quedan 'rejected'", async () => {
