@@ -26,7 +26,7 @@
  */
 import { env } from "../config/env";
 import {
-  ClienteCt, DetalleExistencia, ErrorCt, EstatusPedidoCt, ExistenciaPorAlmacen,
+  ClienteCt, DetalleExistencia, ErrorCt, EstatusPedidoCt, ExistenciaPorAlmacen, ExistenciaTotal,
   PedidoCt, RespuestaConfirmacionCt, RespuestaPedidoCt,
 } from "./CtClient";
 
@@ -91,10 +91,10 @@ export class CtSimulado implements ClienteCt {
     };
   }
 
-  async existenciaTotal(codigo: string): Promise<ExistenciaPorAlmacen> {
+  async existenciaTotal(codigo: string): Promise<ExistenciaTotal> {
     this.simularCaida();
     const cantidad = this.disponible(codigo);
-    return { TOTAL: { existencia: cantidad + Math.floor(cantidad / 2) } };
+    return { existencia_total: cantidad + Math.floor(cantidad / 2) };
   }
 
   async detalle(codigo: string, almacen: string): Promise<DetalleExistencia[]> {

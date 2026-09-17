@@ -9,6 +9,7 @@ Node 20+ · TypeScript · Express 5 · TypeORM · SQLite en local, PostgreSQL en
 npm run dev            # tsx watch (NO verifica tipos)
 npm run typecheck      # npx tsc --noEmit — correr SIEMPRE antes de un push
 npm test               # flujo del pedido y autenticación, sin red ni base
+npm run simular:ct      # paso 6: servidor real + CT simulado, 4 escenarios; Shopify apagado
 npm run build && npm start
 npm run migration:run · inspect:csv -- <csv> · import:mappings -- <csv> · sync:inventory · confirm:orders
 
@@ -74,4 +75,5 @@ src/
 - En Railway: `SHOPIFY_WEBHOOK_SECRET` (el client secret de la app) y `ADMIN_API_KEY`.
 - Dirección de envío: Shopify no tiene colonia; hoy sale de `company`. `tipoPago` y `cfdi` provisionales. Acordar con CT.
 - Mapeos: 88 candidatos en `data/candidatos-ct.csv` sin clave de CT. Hace falta el catálogo de CT.
-- Paso 6: punta a punta con `CT_MODO=simulado` (`ok`, `sin_stock`, `rechazo`, `caida`). Paso 7: CT real.
+- Paso 6 hecho (17 sep): `npm run simular:ct` pasa los cuatro escenarios. No cubre las escrituras a Shopify.
+- Paso 7: CT real. Hace falta que un representante de CT dé `email`, `cliente` y `rfc` para `/cliente/token`.

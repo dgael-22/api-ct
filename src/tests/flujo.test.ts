@@ -154,6 +154,14 @@ test("detención 3: un 5xx al crear el pedido queda 'uncertain', no 'rejected'",
   assert.equal(r.registro.status, "uncertain");
 });
 
+test("detención 3: un 408 (timeout que documenta CT) queda 'uncertain', no 'rejected'", async () => {
+  const ct = new CtQueFalla(new ErrorCt("CT respondió 408 en POST /pedido", 408, null, false));
+  const { mapeos, servicio } = montar(ct);
+  await confirmarMapeo(mapeos);
+  const r = await servicio.procesar(orden("5002"));
+  assert.equal(r.registro.status, "uncertain");
+});
+
 test("sin token la petición no salió: queda 'blocked', no 'uncertain'", async () => {
   const ct = new CtQueFalla(new ErrorCt("No se obtuvo token de CT", 0, null, true, true));
   const { mapeos, servicio } = montar(ct);

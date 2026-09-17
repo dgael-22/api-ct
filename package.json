@@ -12,6 +12,7 @@
     "start": "node dist/app.js",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test \"src/**/*.test.ts\"",
+    "simular:ct": "node src/scripts/simularCt.mjs",
     "migration:run": "tsx src/scripts/runMigrations.ts",
     "inspect:csv": "tsx src/scripts/inspectCsv.ts",
     "import:mappings": "tsx src/scripts/importConfirmedMappings.ts",

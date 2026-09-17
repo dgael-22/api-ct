@@ -9,7 +9,7 @@
  *   1. SKU sin mapeo confirmado  -> estado "blocked" con el motivo; no se envía
  *                                   a CT y se puede reintentar al confirmar el mapeo.
  *   2. CT rechaza o no hay stock -> se guarda el rechazo, no se marca surtida.
- *   3. Respuesta incierta        -> estado "uncertain" (timeout, red o 5xx); se
+ *   3. Respuesta incierta        -> estado "uncertain" (timeout, red, 408 o 5xx); se
  *                                   verifica en CT ANTES de volver a crear el pedido.
  */
 import { Repository } from "typeorm";
@@ -168,9 +168,12 @@ export class OrderService {
       }
 
       // --- Detención 3: respuesta incierta -------------------------------
-      // Timeout, red o 5xx: el pedido pudo haberse creado (un 502/504 de la
-      // pasarela puede llegar DESPUÉS de que CT lo procesó). NO se reintenta.
-      if (error instanceof ErrorCt && (error.httpStatus === 0 || error.httpStatus >= 500)) {
+      // Timeout, red, 408 o 5xx: el pedido pudo haberse creado (un 502/504 de
+      // la pasarela puede llegar DESPUÉS de que CT lo procesó). CT documenta
+      // 408 en POST /pedido: también es un timeout. NO se reintenta.
+      const incierta = error instanceof ErrorCt &&
+        (error.httpStatus === 0 || error.httpStatus === 408 || error.httpStatus >= 500);
+      if (incierta) {
         registro.status = "uncertain";
         registro.lastResponse =
           `Respuesta incierta de CT. Verificar en /pedido/listar si el pedido con ` +

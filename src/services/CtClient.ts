@@ -13,6 +13,8 @@
  *   GET  /pedido/estatus/:folio
  *   GET  /pedido/listar
  *
+ *   GET  /existencia/:codigo/TOTAL -> { existencia_total: n }
+ *
  * Todas las llamadas van con el header `x-auth`.
  *
  * Sin librería HTTP: fetch nativo, como recomienda la sección 7 del ETS.
@@ -27,6 +29,11 @@ export interface RespuestaToken {
 
 /** GET /existencia/:codigo — una llave por almacén */
 export type ExistenciaPorAlmacen = Record<string, { existencia: number }>;
+
+/** GET /existencia/:codigo/TOTAL */
+export interface ExistenciaTotal {
+  existencia_total: number;
+}
 
 /** GET /existencia/detalle/:codigo/:almacen */
 export interface DetalleExistencia {
@@ -125,7 +132,7 @@ interface OpcionesPeticion {
 export interface ClienteCt {
   obtenerToken(forzar?: boolean): Promise<string>;
   existenciaPorAlmacen(codigo: string): Promise<ExistenciaPorAlmacen>;
-  existenciaTotal(codigo: string): Promise<ExistenciaPorAlmacen>;
+  existenciaTotal(codigo: string): Promise<ExistenciaTotal>;
   detalle(codigo: string, almacen: string): Promise<DetalleExistencia[]>;
   catalogoCompleto(): Promise<unknown[]>;
   crearPedido(pedido: PedidoCt): Promise<RespuestaPedidoCt>;
@@ -181,7 +188,7 @@ export class CtClient implements ClienteCt {
     return this.peticion(`/existencia/${encodeURIComponent(codigo)}`, { reintentos: 2 });
   }
 
-  existenciaTotal(codigo: string): Promise<ExistenciaPorAlmacen> {
+  existenciaTotal(codigo: string): Promise<ExistenciaTotal> {
     return this.peticion(`/existencia/${encodeURIComponent(codigo)}/TOTAL`, { reintentos: 2 });
   }
 
