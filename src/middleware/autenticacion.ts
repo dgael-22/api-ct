@@ -15,7 +15,7 @@
 import crypto from "node:crypto";
 import { NextFunction, Request, Response } from "express";
 import { env, FaltaConfiguracion } from "../config/env";
-import { registrarEvento } from "../services/bitacora";
+import { ipCliente, registrarEvento } from "../services/bitacora";
 
 /** Compara en tiempo constante aunque las longitudes difieran. */
 function mismaClave(recibida: string, esperada: string): boolean {
@@ -45,7 +45,7 @@ export function requerirClaveAdmin(peticion: Request, respuesta: Response, sigui
     // Nunca se guarda la clave recibida: sólo desde dónde y a qué.
     void registrarEvento({
       nivel: "aviso", tipo: "acceso_rechazado",
-      mensaje: `${peticion.method} ${peticion.originalUrl.split("?")[0]} desde ${peticion.ip}` +
+      mensaje: `${peticion.method} ${peticion.originalUrl.split("?")[0]} desde ${ipCliente(peticion)}` +
         (recibida ? " con clave inválida" : " sin clave"),
     });
     respuesta.status(401).json({

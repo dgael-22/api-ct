@@ -7,6 +7,7 @@
  *      escritura falla, el evento sólo sale por consola.
  *   2. NUNCA recibe secretos. Quien llama pasa textos ya limpios.
  */
+import type { Request } from "express";
 import { LessThan } from "typeorm";
 import { AppDataSource } from "../data-source";
 import { Evento, NivelEvento } from "../entities/Evento";
@@ -25,6 +26,15 @@ function comoTexto(detalle: unknown): string | null {
   if (detalle === undefined || detalle === null || detalle === "") return null;
   const texto = typeof detalle === "string" ? detalle : JSON.stringify(detalle);
   return texto.length > MAXIMO_DETALLE ? `${texto.slice(0, MAXIMO_DETALLE)}…` : texto;
+}
+
+/**
+ * IP de quien hizo la petición. Detrás del proxy de Railway `peticion.ip` es
+ * la interna (100.64.x.x); la real llega en X-Real-IP. Sólo sirve para la
+ * bitácora: no se usa para autorizar nada.
+ */
+export function ipCliente(peticion: Request): string {
+  return String(peticion.header("x-real-ip") ?? "").trim() || peticion.ip || "desconocida";
 }
 
 export async function registrarEvento(datos: DatosEvento): Promise<void> {

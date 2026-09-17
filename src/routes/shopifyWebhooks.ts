@@ -19,7 +19,7 @@ import crypto from "node:crypto";
 import express, { Request, Response, Router } from "express";
 import { env } from "../config/env";
 import { repositorios } from "../data-source";
-import { registrarEvento } from "../services/bitacora";
+import { ipCliente, registrarEvento } from "../services/bitacora";
 import { InventorySyncService } from "../services/InventorySyncService";
 import { LineaOrden, OrdenShopify, OrderService } from "../services/OrderService";
 import { ShopifyClient } from "../services/ShopifyClient";
@@ -95,7 +95,7 @@ export function crearRutasWebhook(): Router {
       if (!Buffer.isBuffer(crudo) || !firmaValida(crudo, firma, secreto)) {
         void registrarEvento({
           nivel: "aviso", tipo: "webhook_firma_invalida",
-          mensaje: `Webhook con firma inválida desde ${peticion.ip}`,
+          mensaje: `Webhook con firma inválida desde ${ipCliente(peticion)}`,
         });
         respuesta.status(401).json({ error: "firma_invalida" });
         return;
