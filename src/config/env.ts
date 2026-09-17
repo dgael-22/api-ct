@@ -54,6 +54,8 @@ export const env = {
       return railway ? `https://${railway}` : "";
     },
     get entorno(): string { return opcional("NODE_ENV", "development"); },
+    /** Clave de los endpoints de gestión (cabecera x-api-key). Sin ella no se abren. */
+    get claveAdmin(): string { return requerida("ADMIN_API_KEY"); },
     /**
      * Minutos entre confirmaciones automáticas de pedidos. 0 = apagado.
      * En Railway conviene 15: CT cancela solo lo que no se confirma en 48 h,

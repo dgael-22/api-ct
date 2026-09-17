@@ -11,6 +11,7 @@
     "build": "tsc",
     "start": "node dist/app.js",
     "typecheck": "tsc --noEmit",
+    "test": "tsx --test \"src/**/*.test.ts\"",
     "migration:run": "tsx src/scripts/runMigrations.ts",
     "inspect:csv": "tsx src/scripts/inspectCsv.ts",
     "import:mappings": "tsx src/scripts/importConfirmedMappings.ts",
@@ -18,7 +19,12 @@
     "confirm:orders": "tsx src/scripts/confirmOrders.ts",
     "shopify:locations": "tsx src/scripts/shopifyLocations.ts",
     "shopify:catalogo": "tsx src/scripts/shopifyCatalogo.ts",
-    "shopify:webhook": "tsx src/scripts/shopifyWebhook.ts"
+    "shopify:webhook": "tsx src/scripts/shopifyWebhook.ts",
+    "shopify:colecciones": "tsx src/scripts/shopifyColecciones.ts",
+    "shopify:menu": "tsx src/scripts/shopifyMenu.ts",
+    "shopify:metafields": "tsx src/scripts/shopifyMetafields.ts",
+    "shopify:organizar": "tsx src/scripts/shopifyOrganizar.ts",
+    "shopify:archivar": "tsx src/scripts/shopifyArchivar.ts"
   },
   "dependencies": {
     "@shopify/shopify-api": "^11.6.0",

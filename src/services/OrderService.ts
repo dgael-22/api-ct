@@ -6,10 +6,11 @@
  *
  * Las tres detenciones indispensables (sección 3.1 del ETS) están aquí:
  *
- *   1. SKU sin mapeo confirmado  -> se detiene la línea, no se envía a CT.
+ *   1. SKU sin mapeo confirmado  -> estado "blocked" con el motivo; no se envía
+ *                                   a CT y se puede reintentar al confirmar el mapeo.
  *   2. CT rechaza o no hay stock -> se guarda el rechazo, no se marca surtida.
- *   3. Respuesta incierta        -> estado "uncertain"; se verifica en CT
- *                                   ANTES de volver a crear el pedido.
+ *   3. Respuesta incierta        -> estado "uncertain" (timeout, red o 5xx); se
+ *                                   verifica en CT ANTES de volver a crear el pedido.
  */
 import { Repository } from "typeorm";
 import { env } from "../config/env";
@@ -86,13 +87,23 @@ export class OrderService {
   async procesar(orden: OrdenShopify): Promise<ResultadoOrden> {
     const registro = await this.registrar(orden);
 
-    // Idempotencia: si ya se envió, no se vuelve a enviar.
-    if (registro.status !== "received") {
+    // Idempotencia: si ya se envió, no se vuelve a enviar. "blocked" sí se
+    // reintenta: nunca llegó a CT, así que no hay pedido que duplicar.
+    if (registro.status !== "received" && registro.status !== "blocked") {
       return { registro, reflejadoEnShopify: false, stockResincronizado: 0 };
     }
 
     // --- Detención 1: toda línea necesita mapeo confirmado (RF-01, RF-04) ---
-    const { productos, clavesCt } = await this.traducirLineas(orden.lineas);
+    // Antes el error salía sin guardar nada: la orden quedaba en "received",
+    // sin motivo y sin aviso en Shopify. Ahora queda registrada.
+    let productos: LineaPedidoCt[];
+    let clavesCt: string[];
+    try {
+      ({ productos, clavesCt } = await this.traducirLineas(orden.lineas));
+    } catch (e) {
+      if (!(e instanceof ErrorDetencion)) throw e;
+      return this.detener(registro, e.motivo, e.message);
+    }
 
     const payload: PedidoCt = {
       idPedido: registro.externalReference as number,
@@ -151,9 +162,15 @@ export class OrderService {
     } catch (e) {
       const error = e as ErrorCt;
 
+      // Falló antes de salir (sin token): CT no recibió nada. No es incierto.
+      if (error instanceof ErrorCt && error.sinEnviar) {
+        return this.detener(registro, "ct_sin_conexion", error.message);
+      }
+
       // --- Detención 3: respuesta incierta -------------------------------
-      // Timeout o red: el pedido pudo haberse creado. NO se reintenta.
-      if (error instanceof ErrorCt && error.httpStatus === 0) {
+      // Timeout, red o 5xx: el pedido pudo haberse creado (un 502/504 de la
+      // pasarela puede llegar DESPUÉS de que CT lo procesó). NO se reintenta.
+      if (error instanceof ErrorCt && (error.httpStatus === 0 || error.httpStatus >= 500)) {
         registro.status = "uncertain";
         registro.lastResponse =
           `Respuesta incierta de CT. Verificar en /pedido/listar si el pedido con ` +
@@ -244,6 +261,16 @@ export class OrderService {
       }
     }
     return { confirmados, fallidos, vencidos, porVencer };
+  }
+
+  /** Detiene la orden antes de CT: queda el motivo en la base y en Shopify. */
+  private async detener(registro: OrderMapping, motivo: string, detalle: string): Promise<ResultadoOrden> {
+    registro.status = "blocked";
+    registro.ctStatus = motivo;
+    registro.lastResponse = `Detenida antes de enviar a CT (${motivo}): ${detalle}`;
+    await this.ordenes.save(registro);
+    const reflejado = await this.reflejar(registro);
+    return { registro, reflejadoEnShopify: reflejado, stockResincronizado: 0 };
   }
 
   /** Crea o recupera el OrderMapping de esta orden. */

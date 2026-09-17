@@ -15,11 +15,15 @@
  *   GET  /orders/:shopifyOrderId              una orden
  *   POST /orders/confirm                      confirma en CT los pendientes
  *   POST /webhooks/shopify/orders-paid        RF-03: la orden pagada
+ *
+ * /mappings, /inventory y /orders piden la cabecera x-api-key (ADMIN_API_KEY).
+ * /health y el webhook no: el primero no expone datos y el segundo valida HMAC.
  */
 import express, { NextFunction, Request, Response } from "express";
 import { env, estaDefinida, FaltaConfiguracion } from "./config/env";
 import { esPostgres, inicializarBd, repositorios } from "./data-source";
 import { iniciarConfirmacionAutomatica } from "./jobs/confirmScheduler";
+import { requerirClaveAdmin } from "./middleware/autenticacion";
 import { crearRutasWebhook } from "./routes/shopifyWebhooks";
 import { InventorySyncService } from "./services/InventorySyncService";
 import { OrderService } from "./services/OrderService";
@@ -31,6 +35,9 @@ export const app = express();
 // El webhook necesita el cuerpo crudo, así que se monta ANTES del json().
 app.use(crearRutasWebhook());
 app.use(express.json({ limit: "2mb" }));
+
+// Endpoints de gestión: sólo con la clave de administración.
+app.use(["/mappings", "/inventory", "/orders"], requerirClaveAdmin);
 
 // ------------------------------------------------------------------ health ---
 
@@ -59,6 +66,7 @@ app.get("/health", (_peticion: Request, respuesta: Response) => {
         (estaDefinida("CT_EMAIL") && estaDefinida("CT_CLIENTE") && estaDefinida("CT_RFC")),
       almacen: estaDefinida("CT_ALMACEN"),
     },
+    seguridad: { claveAdmin: estaDefinida("ADMIN_API_KEY") },
     baseDeDatos: esPostgres() ? "postgres" : "sqlite",
     urlPublica: env.app.baseUrl || "(sin definir)",
     confirmacionAutomaticaMin: env.app.minutosConfirmacion,
@@ -67,9 +75,9 @@ app.get("/health", (_peticion: Request, respuesta: Response) => {
   // En modo simulado las credenciales de CT no hacen falta: no se usan.
   const requeridas = env.ct.modo === "simulado"
     ? ["SHOPIFY_SHOP_DOMAIN", "SHOPIFY_WEBHOOK_SECRET", "SHOPIFY_LOCATION_ID",
-       "CT_ALMACEN"]
+       "CT_ALMACEN", "ADMIN_API_KEY"]
     : ["SHOPIFY_SHOP_DOMAIN", "SHOPIFY_WEBHOOK_SECRET", "SHOPIFY_LOCATION_ID",
-       "CT_EMAIL", "CT_CLIENTE", "CT_RFC", "CT_ALMACEN"];
+       "CT_EMAIL", "CT_CLIENTE", "CT_RFC", "CT_ALMACEN", "ADMIN_API_KEY"];
   const faltantes = requeridas.filter((v) => !estaDefinida(v));
 
   // El token de Shopify se resuelve por cualquiera de los dos caminos.

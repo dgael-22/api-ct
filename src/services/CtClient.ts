@@ -90,13 +90,18 @@ export interface EstatusPedidoCt {
   uuid: string;
 }
 
-/** Error normalizado. `reintentable` distingue lo que sí se puede repetir. */
+/**
+ * Error normalizado. `reintentable` distingue lo que sí se puede repetir.
+ * `sinEnviar` marca los fallos ocurridos ANTES de que la petición saliera
+ * (por ejemplo, no se pudo obtener el token): ahí no hay nada incierto.
+ */
 export class ErrorCt extends Error {
   constructor(
     mensaje: string,
     public readonly httpStatus: number,
     public readonly cuerpo: unknown,
-    public readonly reintentable: boolean
+    public readonly reintentable: boolean,
+    public readonly sinEnviar: boolean = false
   ) {
     super(mensaje);
     this.name = "ErrorCt";
@@ -236,7 +241,7 @@ export class CtClient implements ClienteCt {
 
     for (;;) {
       const cabeceras: Record<string, string> = { "Content-Type": "application/json" };
-      if (requiereToken) cabeceras["x-auth"] = await this.obtenerToken();
+      if (requiereToken) cabeceras["x-auth"] = await this.tokenAntesDeEnviar();
 
       const abortador = new AbortController();
       const temporizador = setTimeout(() => abortador.abort(), timeoutMs);
@@ -258,7 +263,8 @@ export class CtClient implements ClienteCt {
         if (respuesta.status === 401 && requiereToken && !renovadoPor401) {
           renovadoPor401 = true;
           this.token = null;
-          await this.obtenerToken(true);
+          // CT respondió 401: no procesó nada. Si renovar falla, sigue sin enviarse.
+          await this.tokenAntesDeEnviar(true);
           continue;
         }
 
@@ -289,6 +295,19 @@ export class CtClient implements ClienteCt {
       } finally {
         clearTimeout(temporizador);
       }
+    }
+  }
+
+  /** El token, marcando cualquier fallo como "la petición no salió". */
+  private async tokenAntesDeEnviar(forzar = false): Promise<string> {
+    try {
+      return await this.obtenerToken(forzar);
+    } catch (e) {
+      const base = e instanceof ErrorCt ? e : null;
+      throw new ErrorCt(
+        `No se obtuvo token de CT, la petición no se envió: ${(e as Error).message}`,
+        base?.httpStatus ?? 0, base?.cuerpo ?? null, base?.reintentable ?? true, true
+      );
     }
   }
 

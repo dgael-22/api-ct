@@ -15,6 +15,7 @@ import { TIPO_FECHA } from "./tipos";
 
 export type EstadoOrden =
   | "received"    // llegó el webhook
+  | "blocked"     // detenida ANTES de llegar a CT (sin mapeo, sin token): se puede reintentar
   | "sent"        // se creó el pedido en CT, falta confirmarlo
   | "accepted"    // CT lo confirmó: la compra quedó en firme
   | "rejected"    // CT lo rechazó
