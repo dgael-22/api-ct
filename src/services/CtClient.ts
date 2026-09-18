@@ -145,9 +145,37 @@ export interface ClienteCt {
   readonly simulado: boolean;
 }
 
+/**
+ * CT permite 100 peticiones por minuto. El limitador las cuenta y espera lo
+ * necesario antes de pasarse, en vez de que CT responda 429 a media compra.
+ * Es por proceso, que es como corre el middleware (una instancia de CtClient).
+ */
+class LimitePorMinuto {
+  private marcas: number[] = [];
+
+  constructor(private readonly maximo: number) {}
+
+  async esperarTurno(): Promise<void> {
+    if (!(this.maximo > 0)) return;
+    for (;;) {
+      const hace60s = Date.now() - 60_000;
+      this.marcas = this.marcas.filter((m) => m > hace60s);
+      if (this.marcas.length < this.maximo) {
+        this.marcas.push(Date.now());
+        return;
+      }
+      // La más vieja dice cuándo se libera un lugar.
+      const espera = this.marcas[0] - hace60s;
+      await new Promise((r) => setTimeout(r, Math.max(espera, 50)));
+    }
+  }
+}
+
 export class CtClient implements ClienteCt {
   /** Este sí habla con CT. */
   readonly simulado = false;
+
+  private readonly limite = new LimitePorMinuto(env.ct.limitePorMinuto);
 
   private token: string | null = null;
   private tokenExpiraEn = 0;
@@ -177,8 +205,9 @@ export class CtClient implements ClienteCt {
       throw new ErrorCt("CT no devolvió token en /cliente/token", 0, respuesta, false);
     }
     this.token = respuesta.token;
-    // PENDIENTE: CT no documenta la vigencia. Se renueva por tiempo y ante 401.
-    this.tokenExpiraEn = Date.now() + 60 * 60 * 1000;
+    // CT (17 sep 2026): el token se genera cada 24 h. Se renueva una hora
+    // antes de vencer, y de todos modos ante un 401.
+    this.tokenExpiraEn = Date.now() + 23 * 60 * 60 * 1000;
     return this.token;
   }
 
@@ -248,6 +277,7 @@ export class CtClient implements ClienteCt {
     let renovadoPor401 = false;
 
     for (;;) {
+      await this.limite.esperarTurno();
       const cabeceras: Record<string, string> = { "Content-Type": "application/json" };
       if (requiereToken) cabeceras["x-auth"] = await this.tokenAntesDeEnviar();
       if (env.ct.proxyKey) cabeceras["x-proxy-key"] = env.ct.proxyKey;

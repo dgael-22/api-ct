@@ -13,14 +13,14 @@ import { test } from "node:test";
 import express from "express";
 
 import { requerirClaveAdmin } from "../middleware/autenticacion";
-import { extraerOrden, firmaValida } from "../routes/shopifyWebhooks";
+import { direccionDeEnvio, extraerOrden, firmaValida } from "../routes/shopifyWebhooks";
 import { registrarEvento } from "../services/bitacora";
 import { CtClient, DetalleExistencia, ErrorCt, PedidoCt, RespuestaPedidoCt } from "../services/CtClient";
 import { CtSimulado, Escenario } from "../services/CtSimulado";
 import { crearClienteCt, reiniciarClienteCt } from "../services/ctFactory";
 import { normalizarVariante } from "../entities/ProductMapping";
 import { InventorySyncService } from "../services/InventorySyncService";
-import { OrdenShopify, OrderService } from "../services/OrderService";
+import { camposFaltantesDeEnvio, OrdenShopify, OrderService } from "../services/OrderService";
 import type { ShopifyClient } from "../services/ShopifyClient";
 
 process.env.CT_ALMACEN = "01A";
@@ -75,9 +75,17 @@ async function confirmarMapeo(mapeos: RepoFalso<any>, sku = "SKU-1", variante = 
   }));
 }
 
+/** Dirección completa: CT no surte con campos vacíos. */
+const ENVIO = {
+  nombre: "Cliente de Prueba", direccion: "Av. Juárez", entreCalles: "S/N",
+  noExterior: "1250", noInterior: "S/N", colonia: "Centro", estado: "Guanajuato",
+  ciudad: "León", codigoPostal: 37000, telefono: 4771234567,
+};
+
 const orden = (id: string, sku: string | null = "SKU-1", variantId: string | null = "1"): OrdenShopify => ({
   id, name: `#${id}`,
   lineas: [{ sku, variantId, cantidad: 1, precio: 100, moneda: "MXN" }],
+  envio: { ...ENVIO },
 });
 
 /** CT simulado cuyo crearPedido falla con el error que se le indique. */
@@ -143,6 +151,78 @@ test("detención 1: sin mapeo queda 'blocked' con motivo, y se reintenta al conf
   await confirmarMapeo(mapeos);
   const reintento = await servicio.procesar(orden("2001"));
   assert.equal(reintento.registro.status, "accepted");
+});
+
+// --------------------------------------------------------------- envío ---
+
+test("sin datos completos de envío la orden se detiene y no llega a CT", async () => {
+  const ct = new CtSimulado("ok");
+  const { mapeos, servicio } = montar(ct);
+  await confirmarMapeo(mapeos);
+
+  const sinColonia = { ...orden("1701"), envio: { ...ENVIO, colonia: "" } };
+  const r = await servicio.procesar(sinColonia);
+  assert.equal(r.registro.status, "blocked");
+  assert.equal(r.registro.ctStatus, "envio_incompleto");
+  assert.match(r.registro.lastResponse ?? "", /colonia/);
+  assert.equal((await ct.listarPedidos() as unknown[]).length, 0, "no llegó nada a CT");
+
+  const sinDireccion = { ...orden("1702"), envio: undefined };
+  assert.equal((await servicio.procesar(sinDireccion)).registro.ctStatus, "envio_incompleto");
+});
+
+test("camposFaltantesDeEnvio nombra cada campo vacío", () => {
+  assert.deepEqual(camposFaltantesDeEnvio({ ...ENVIO }), []);
+  assert.deepEqual(
+    camposFaltantesDeEnvio({ ...ENVIO, telefono: 0, ciudad: "  " }),
+    ["ciudad", "telefono"]
+  );
+});
+
+test("la dirección de Shopify se traduce a los campos de CT, sin dejar vacíos", () => {
+  const conEmpresa = direccionDeEnvio({
+    shipping_address: {
+      first_name: "Ana", last_name: "López", address1: "Av. Juárez 1250", address2: "Interior 3",
+      company: "Centro", city: "León", province: "Guanajuato", zip: "37000", phone: "(477) 123-4567",
+    },
+  });
+  assert.equal(conEmpresa?.direccion, "Av. Juárez");
+  assert.equal(conEmpresa?.noExterior, "1250");
+  assert.equal(conEmpresa?.noInterior, "Interior 3");
+  assert.equal(conEmpresa?.colonia, "Centro");
+  assert.equal(conEmpresa?.codigoPostal, 37000);
+  assert.equal(conEmpresa?.telefono, 4771234567);
+  assert.equal(conEmpresa?.entreCalles, "S/N");
+  assert.deepEqual(camposFaltantesDeEnvio(conEmpresa), []);
+
+  // Sin "Empresa": la colonia sale de la segunda línea y el número, de la primera.
+  const sinEmpresa = direccionDeEnvio({
+    shipping_address: {
+      first_name: "Ana", address1: "Calle Falsa 123", address2: "Del Valle",
+      city: "CDMX", province: "CDMX", zip: "03100", phone: "5555555555",
+    },
+  });
+  assert.equal(sinEmpresa?.direccion, "Calle Falsa");
+  assert.equal(sinEmpresa?.noExterior, "123");
+  assert.equal(sinEmpresa?.colonia, "Del Valle");
+
+  assert.equal(direccionDeEnvio({}), undefined);
+});
+
+test("el tipo de pago y el CFDI salen de la configuración", async () => {
+  const anterior = process.env.CT_TIPO_PAGO;
+  process.env.CT_TIPO_PAGO = "03";
+  try {
+    const { mapeos, servicio, ordenes } = montar(new CtSimulado("ok"));
+    await confirmarMapeo(mapeos);
+    await servicio.procesar(orden("1801"));
+    const enviado = JSON.parse(ordenes.filas[0].requestPayload ?? "{}") as PedidoCt;
+    assert.equal(enviado.tipoPago, "03");
+    assert.equal(enviado.cfdi, "G01");
+  } finally {
+    if (anterior === undefined) delete process.env.CT_TIPO_PAGO;
+    else process.env.CT_TIPO_PAGO = anterior;
+  }
 });
 
 // ------------------------------------------------------------ variantes ---

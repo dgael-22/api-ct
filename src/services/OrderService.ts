@@ -37,7 +37,7 @@ export interface OrdenShopify {
   name: string | null;
   lineas: LineaOrden[];
   envio?: EnvioCt;
-  /** PENDIENTE con CT: catálogo de tipoPago y uso de CFDI que aplica a SCHU. */
+  /** CT: 99 = crédito CT, 03 = contado (CT_TIPO_PAGO). */
   tipoPago?: string;
   cfdi?: string;
 }
@@ -48,6 +48,23 @@ export interface OrdenShopify {
  * de conocer el API real, donde crear el pedido y confirmarlo son DOS pasos.
  */
 export const HORAS_PARA_CONFIRMAR = 48;
+
+/**
+ * Campos del envío que CT exige cuando ellos generan la guía (confirmado por
+ * CT el 17 de septiembre de 2026: "no puede enviar con campos vacíos").
+ * `entreCalles` y `noInterior` no se piden al cliente: van con CT_RELLENO_ENVIO.
+ */
+export const CAMPOS_ENVIO: (keyof EnvioCt)[] = [
+  "nombre", "direccion", "noExterior", "colonia", "ciudad", "estado", "codigoPostal", "telefono",
+];
+
+export function camposFaltantesDeEnvio(envio: EnvioCt | undefined): string[] {
+  if (!envio) return ["la orden no trae dirección de envío"];
+  return CAMPOS_ENVIO.filter((campo) => {
+    const valor = envio[campo];
+    return typeof valor === "number" ? !(valor > 0) : !String(valor ?? "").trim();
+  });
+}
 
 export class ErrorDetencion extends Error {
   constructor(mensaje: string, public readonly motivo: string) {
@@ -161,11 +178,24 @@ export class OrderService {
       return this.detener(registro, e.motivo, e.message);
     }
 
+    // --- Detención 1b: CT no envía con datos incompletos --------------
+    // Si CT genera la guía, ningún campo del envío puede ir vacío. Antes de
+    // pedir, se revisa: es preferible detener la orden y avisar que mandar
+    // una dirección que CT no puede surtir.
+    const faltantes = camposFaltantesDeEnvio(orden.envio);
+    if (faltantes.length) {
+      return this.detener(
+        registro, "envio_incompleto",
+        `Faltan datos de envío que CT exige: ${faltantes.join(", ")}. ` +
+        `Complétalos en la orden de Shopify y reintenta con POST /orders/${orden.id}/retry.`
+      );
+    }
+
     const payload: PedidoCt = {
       idPedido: registro.externalReference as number,
       almacen: env.ct.almacen,
-      tipoPago: orden.tipoPago ?? "99",
-      cfdi: orden.cfdi ?? "G01",
+      tipoPago: orden.tipoPago ?? env.ct.tipoPago,
+      cfdi: orden.cfdi ?? env.ct.cfdi,
       envio: orden.envio ? [orden.envio] : [],
       producto: productos,
     };

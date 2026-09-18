@@ -39,6 +39,20 @@ Los scripts de Shopify son **idempotentes** y sin `--aplicar` sólo simulan. Man
 - **Bitácora** (`registrarEvento`, tabla `bitacora`, `GET /bitacora`): nunca rompe el flujo y nunca recibe secretos.
 - **`/mappings`, `/inventory`, `/orders` y `/bitacora` piden `x-api-key`** (`ADMIN_API_KEY`) y fallan cerrados sin ella. `/health` y el webhook (HMAC) no.
 
+## Lo que confirmó CT (17 sep 2026)
+
+| Tema | Respuesta de CT |
+|---|---|
+| Credenciales | CT envía los datos para generar el token |
+| Catálogo y existencias | Por **FTP**: un JSON que se regenera **cada 15 min** (no por la API artículo por artículo) |
+| Dropshipping | Si CT genera la guía, **todos los campos del envío son obligatorios**: no acepta vacíos |
+| `tipoPago` | **99** con crédito CT, **03** de contado (`CT_TIPO_PAGO`) |
+| Almacén | Todos los almacenes están disponibles para envío |
+| Token y límites | Token de **24 h**; **100 peticiones por minuto** |
+| Pruebas | **Sí hay ambiente de pruebas**; un pedido sin confirmar se cancela solo a las 48 h |
+
+Por eso: el token se renueva a las 23 h, `CtClient` limita a 100 peticiones por minuto, y una orden sin dirección completa se detiene con `envio_incompleto` antes de llegar a CT.
+
 ## Las tres detenciones del ETS
 
 Cuando el dato es ambiguo la respuesta correcta es **parar, no adivinar**:

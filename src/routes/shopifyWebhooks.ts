@@ -21,6 +21,7 @@ import { env } from "../config/env";
 import { repositorios } from "../data-source";
 import { ipCliente, registrarEvento } from "../services/bitacora";
 import { InventorySyncService } from "../services/InventorySyncService";
+import { EnvioCt } from "../services/CtClient";
 import { LineaOrden, OrdenShopify, OrderService } from "../services/OrderService";
 import { ShopifyClient } from "../services/ShopifyClient";
 import { crearClienteCt } from "../services/ctFactory";
@@ -48,27 +49,60 @@ export function extraerOrden(payload: any): OrdenShopify {
     moneda: payload?.currency ?? "MXN",
   }));
 
-  const direccion = payload?.shipping_address;
-  const envio = direccion
-    ? {
-        nombre: [direccion.first_name, direccion.last_name].filter(Boolean).join(" ").trim(),
-        direccion: direccion.address1 ?? "",
-        entreCalles: " ",
-        noExterior: String(direccion.address2 ?? "").trim() || " ",
-        noInterior: " ",
-        colonia: direccion.company ?? " ",
-        estado: direccion.province ?? "",
-        ciudad: direccion.city ?? "",
-        codigoPostal: Number(String(direccion.zip ?? "").replace(/\D/g, "")) || 0,
-        telefono: Number(String(direccion.phone ?? "").replace(/\D/g, "")) || 0,
-      }
-    : undefined;
+  const envio = direccionDeEnvio(payload);
 
   return {
     id: String(payload?.id ?? ""),
     name: payload?.name ?? null,
     lineas,
     envio,
+  };
+}
+
+/**
+ * Dirección de envío de Shopify traducida a los campos de CT.
+ *
+ * CT no acepta campos vacíos cuando ellos generan la guía, y Shopify no tiene
+ * "colonia" ni "entre calles". Mientras el checkout no capture la colonia:
+ *   · calle y noExterior ← "Av. Juárez 1250" se parte en nombre y número
+ *   · noInterior   ← la segunda línea si dice interior, depto, piso o casa
+ *   · colonia      ← "Empresa", o la segunda línea si no es un interior
+ *   · entreCalles y lo que falte de interior ← CT_RELLENO_ENVIO ("S/N")
+ * Lo que de plano falte lo detiene OrderService con "envio_incompleto": es
+ * mejor avisar que mandar a CT una dirección que no puede surtir.
+ */
+const ES_INTERIOR = /^(int\.?|interior|dep(to|artamento)\.?|piso|casa|local|of(ic)?\.?|edif)/i;
+
+export function direccionDeEnvio(payload: any): EnvioCt | undefined {
+  const d = payload?.shipping_address;
+  if (!d) return undefined;
+
+  const linea1 = String(d.address1 ?? "").trim();
+  const linea2 = String(d.address2 ?? "").trim();
+  const relleno = env.ct.rellenoEnvio;
+  // "Av. Juárez 1250" -> calle "Av. Juárez", número "1250".
+  const conNumero = linea1.match(/^(.*?)[\s#]*(\d+[A-Za-z]?)\s*$/);
+  const calle = conNumero ? conNumero[1].trim() : linea1;
+
+  const esInterior = ES_INTERIOR.test(linea2);
+  // La segunda línea es el número exterior sólo si la calle no traía uno.
+  const linea2EsExterior = !esInterior && /\d/.test(linea2) && !conNumero;
+  const noExterior = conNumero?.[2] ?? (linea2EsExterior ? linea2 : "");
+  const noInterior = esInterior ? linea2 : relleno;
+  const colonia = String(d.company ?? "").trim() ||
+    (esInterior || linea2EsExterior ? "" : linea2);
+
+  return {
+    nombre: [d.first_name, d.last_name].filter(Boolean).join(" ").trim(),
+    direccion: calle,
+    entreCalles: relleno,
+    noExterior,
+    noInterior,
+    colonia,
+    estado: String(d.province ?? "").trim(),
+    ciudad: String(d.city ?? "").trim(),
+    codigoPostal: Number(String(d.zip ?? "").replace(/\D/g, "")) || 0,
+    telefono: Number(String(d.phone ?? "").replace(/\D/g, "")) || 0,
   };
 }
 

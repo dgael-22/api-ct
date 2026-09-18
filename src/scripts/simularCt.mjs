@@ -90,8 +90,10 @@ async function escenario(nombre, puerto) {
     const orden = (id, variante, sku) => ({
       id, name: `#SIM${id}`, currency: "MXN",
       line_items: [{ sku, variant_id: variante, quantity: 2, price: "100.00" }],
-      shipping_address: { first_name: "Prueba", last_name: "Sim", address1: "Calle 1", city: "CDMX",
-        province: "CDMX", zip: "01000", phone: "5555555555", company: "Centro" },
+      // Dirección completa: CT no surte con campos vacíos.
+      shipping_address: { first_name: "Prueba", last_name: "Sim", address1: "Av. Juárez 1250",
+        address2: "Interior 3", company: "Centro", city: "León", province: "Guanajuato",
+        zip: "37000", phone: "4771234567" },
     });
 
     console.log(`webhook con firma falsa -> ${(await webhook(orden(9001, 111, null), true)).status}`);

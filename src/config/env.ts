@@ -56,17 +56,17 @@ export const env = {
     get entorno(): string { return opcional("NODE_ENV", "development"); },
     /** Clave de los endpoints de gestión (cabecera x-api-key). Sin ella no se abren. */
     get claveAdmin(): string { return requerida("ADMIN_API_KEY"); },
-    /**
-     * Minutos entre confirmaciones automáticas de pedidos. 0 = apagado.
-     * En Railway conviene 15: CT cancela solo lo que no se confirma en 48 h,
-     * y ahí no hay nadie corriendo el comando a mano.
-     */
     /** Minutos entre sincronizaciones de existencias CT -> Shopify. 0 = apagado. */
     get minutosInventario(): number {
       return Number(opcional("INVENTORY_SYNC_MINUTES", "0"));
     },
     /** Días que se conservan los eventos de la bitácora. 0 = para siempre. */
     get diasBitacora(): number { return Number(opcional("BITACORA_DIAS", "365")); },
+    /**
+     * Minutos entre confirmaciones automáticas de pedidos. 0 = apagado.
+     * En Railway conviene 15: CT cancela solo lo que no se confirma en 48 h,
+     * y ahí no hay nadie corriendo el comando a mano.
+     */
     get minutosConfirmacion(): number {
       return Number(opcional("CONFIRM_INTERVAL_MINUTES", "0"));
     },
@@ -113,6 +113,17 @@ export const env = {
     get cliente(): string { return requerida("CT_CLIENTE"); },
     get rfc(): string { return requerida("CT_RFC"); },
     get almacen(): string { return requerida("CT_ALMACEN"); },
+    /** CT (17 sep 2026): 99 = crédito CT, 03 = contado. */
+    get tipoPago(): string { return opcional("CT_TIPO_PAGO", "99"); },
+    get cfdi(): string { return opcional("CT_CFDI", "G01"); },
+    /**
+     * Con qué se llenan los datos de envío que el cliente no captura
+     * (entre calles, número interior). CT no acepta campos vacíos cuando
+     * ellos generan la guía.
+     */
+    get rellenoEnvio(): string { return opcional("CT_RELLENO_ENVIO", "S/N"); },
+    /** CT: 100 peticiones por minuto. */
+    get limitePorMinuto(): number { return Number(opcional("CT_LIMITE_POR_MINUTO", "100")); },
   },
 
   /** Importación de productos de CT a Shopify. */
