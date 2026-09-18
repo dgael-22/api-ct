@@ -16,6 +16,7 @@ npm run migration:run · inspect:csv -- <csv> · import:mappings -- <csv> · syn
 
 npm run shopify:locations                       # token + alcances reales + Locations
 npm run shopify:catalogo                        # variantes -> data/catalogo-shopify.csv
+npm run shopify:direcciones [-- 200] [--detalle] # qué traen las direcciones de envío (para CT)
 npm run shopify:webhook -- <url>                # registra orders/paid
 npm run shopify:colecciones -- <csv> [--aplicar] · shopify:menu · shopify:metafields
 npm run shopify:organizar [-- --aplicar] [--limite N] [--handle H]   # data/organizacion.csv
