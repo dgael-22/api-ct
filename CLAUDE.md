@@ -17,6 +17,7 @@ npm run migration:run · inspect:csv -- <csv> · import:mappings -- <csv> · syn
 npm run shopify:locations                       # token + alcances reales + Locations
 npm run shopify:catalogo                        # variantes -> data/catalogo-shopify.csv
 npm run shopify:direcciones [-- 200] [--detalle] # qué traen las direcciones de envío (para CT)
+npm run shopify:vender-sin-stock [-- --aplicar] [--revertir]  # "seguir vendiendo en cero" en lo ya mapeado
 npm run shopify:webhook -- <url>                # registra orders/paid
 npm run shopify:colecciones -- <csv> [--aplicar] · shopify:menu · shopify:metafields
 npm run shopify:organizar [-- --aplicar] [--limite N] [--handle H]   # data/organizacion.csv
@@ -35,6 +36,7 @@ Los scripts de Shopify son **idempotentes** y sin `--aplicar` sólo simulan. Man
 - **El mapeo se busca por variante** (`normalizarVariante`: gid o número). El SKU sólo es respaldo.
 - **Reintentar `blocked` es manual** (`POST /orders/:id/retry`), nunca automático: pudo surtirse por otro lado.
 - **CT exige IP fija.** Producción sale por el proxy de `deploy/proxy` (DigitalOcean + Caddy): `CT_BASE_URL` al proxy y `CT_PROXY_KEY`. Nunca destruir el Droplet: su IP es la registrada en CT.
+- **Que no aparezca agotado**: `CT_EXISTENCIA_TOTAL=true` publica la suma de todos los almacenes; `SHOPIFY_VENDER_SIN_STOCK=true` crea los productos con "seguir vendiendo en cero" (se puede vender lo que CT no tiene); `CT_MARGEN_SEGURIDAD` ya no está fijo en 1.
 - **Existencias automáticas**: `INVENTORY_SYNC_MINUTES` (0 = apagado), pausa `CT_PAUSA_MS` entre productos; un 429 de CT corta la pasada.
 - **Importar catálogo de CT** (`npm run ct:importar`, `POST /catalogo/ct/importar`, `ImportadorCt`): productos nuevos en BORRADOR; si ya los creó el importador, sólo precio y costo; nunca toca claves mapeadas a mano. El formato del catálogo es PENDIENTE con CT: se ajustan los ALIAS de `catalogoCt.ts`.
 - **Bitácora** (`registrarEvento`, tabla `bitacora`, `GET /bitacora`): nunca rompe el flujo y nunca recibe secretos.

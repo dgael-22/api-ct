@@ -272,6 +272,17 @@ y errores. Filtros: `?orden=<id de Shopify>`, `?tipo=`, `?nivel=info|aviso|error
 Existe porque Railway Hobby borra los logs a los 7 días. Los eventos se
 conservan `BITACORA_DIAS` (365 por defecto) y nunca incluyen claves ni tokens.
 
+## Que un producto no aparezca agotado
+
+| Variable | Qué hace | Riesgo |
+|---|---|---|
+| `CT_EXISTENCIA_TOTAL=true` | Publica la existencia de **todos** los almacenes de CT, no sólo `CT_ALMACEN`. CT confirmó que todos surten envíos | Bajo |
+| `CT_MARGEN_SEGURIDAD` | Piezas que se restan a lo que reporta CT (1 por omisión). En 0 cuando CT confirme que su cantidad ya descuenta lo apartado | Bajo |
+| `SHOPIFY_VENDER_SIN_STOCK=true` | Los productos que crea el importador nacen con "seguir vendiendo cuando no hay existencias": nunca aparecen agotados | **Alto**: se puede vender lo que CT no tiene y habría que reembolsar |
+
+Para lo que ya existe en la tienda: `npm run shopify:vender-sin-stock -- --aplicar`
+(y `--revertir` para dejarlo como estaba). Sin `--aplicar` sólo simula.
+
 ## Existencias automáticas
 
 Con `INVENTORY_SYNC_MINUTES` (0 = apagado) el servicio copia a Shopify la

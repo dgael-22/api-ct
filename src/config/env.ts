@@ -85,6 +85,14 @@ export const env = {
     get tokenFijo(): string { return opcional("SHOPIFY_ACCESS_TOKEN", ""); },
     get webhookSecret(): string { return requerida("SHOPIFY_WEBHOOK_SECRET"); },
     get locationId(): string { return requerida("SHOPIFY_LOCATION_ID"); },
+    /**
+     * "Seguir vendiendo cuando no haya existencias" en los productos que crea
+     * el importador: nunca aparecen agotados. OJO: se puede vender lo que CT
+     * no tiene, y entonces hay que reembolsar.
+     */
+    get venderSinStock(): boolean {
+      return opcional("SHOPIFY_VENDER_SIN_STOCK", "false").toLowerCase() === "true";
+    },
   },
 
   ct: {
@@ -122,6 +130,20 @@ export const env = {
      * ellos generan la guía.
      */
     get rellenoEnvio(): string { return opcional("CT_RELLENO_ENVIO", "S/N"); },
+    /**
+     * Publicar la existencia de TODOS los almacenes de CT en vez de sólo
+     * CT_ALMACEN. CT (17 sep 2026) confirmó que todos surten envíos, así que
+     * un producto agotado en un almacén sigue siendo vendible.
+     */
+    get existenciaDeTodosLosAlmacenes(): boolean {
+      return opcional("CT_EXISTENCIA_TOTAL", "false").toLowerCase() === "true";
+    },
+    /**
+     * Piezas que se restan a lo que reporta CT antes de publicarlo. Existe
+     * porque no está confirmado si su cantidad ya descuenta lo apartado;
+     * cuando CT lo confirme, se pone en 0.
+     */
+    get margenSeguridad(): number { return Number(opcional("CT_MARGEN_SEGURIDAD", "1")); },
     /** CT: 100 peticiones por minuto. */
     get limitePorMinuto(): number { return Number(opcional("CT_LIMITE_POR_MINUTO", "100")); },
   },

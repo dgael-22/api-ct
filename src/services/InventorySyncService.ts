@@ -17,9 +17,9 @@ import { ShopifyClient } from "./ShopifyClient";
  * HUECO ABIERTO (sección 12.1 del ETS): CT sólo expone `existencia` y nadie ha
  * confirmado por escrito si esa cantidad ya descuenta mercancía comprometida.
  * Hasta que lo confirmen se resta un margen, para no publicar stock que en
- * realidad está apartado. Cuando CT responda, se pone en 0.
+ * realidad está apartado. Cuando CT responda, se pone CT_MARGEN_SEGURIDAD=0.
  */
-export const MARGEN_SEGURIDAD = 1;
+export const margenSeguridad = (): number => env.ct.margenSeguridad;
 
 export interface ResultadoSincronizacion {
   shopifySku: string;
@@ -40,7 +40,22 @@ export class InventorySyncService {
 
   /** Cantidad que se publica a partir de lo que reporta CT. Nunca negativa. */
   calcularPublicable(existencia: number): number {
-    return Math.max(0, existencia - MARGEN_SEGURIDAD);
+    return Math.max(0, existencia - margenSeguridad());
+  }
+
+  /**
+   * Existencia que se publica de una clave. Con CT_EXISTENCIA_TOTAL se suman
+   * todos los almacenes de CT (todos surten envíos); si no, sólo CT_ALMACEN.
+   * `undefined` significa "CT no reporta esa clave", que no es lo mismo que 0.
+   */
+  async existenciaDeCt(ctSku: string, almacen: string): Promise<number | undefined> {
+    if (env.ct.existenciaDeTodosLosAlmacenes) {
+      const total = await this.ct.existenciaTotal(ctSku);
+      const cantidad = Number(total?.existencia_total);
+      return Number.isFinite(cantidad) ? cantidad : undefined;
+    }
+    const porAlmacen = await this.ct.existenciaPorAlmacen(ctSku);
+    return porAlmacen?.[almacen]?.existencia;
   }
 
   /** Sincroniza un mapeo. Sólo se acepta si está confirmado (RF-01). */
@@ -59,16 +74,16 @@ export class InventorySyncService {
       return { ...base, motivo: "el mapeo no está confirmado; no se sincroniza" };
     }
 
-    const porAlmacen = await this.ct.existenciaPorAlmacen(mapeo.ctSku);
-    const reportada = porAlmacen?.[almacen]?.existencia;
+    const reportada = await this.existenciaDeCt(mapeo.ctSku, almacen);
 
     // Distinguir "no existe la clave" de "existe con cero".
     if (reportada === undefined) {
       return {
         ...base,
-        motivo:
-          `CT no reporta el almacén ${almacen} para la clave ${mapeo.ctSku}. ` +
-          `Puede ser clave inexistente o almacén equivocado: no se publica 0 a ciegas.`,
+        motivo: env.ct.existenciaDeTodosLosAlmacenes
+          ? `CT no reporta existencia total para la clave ${mapeo.ctSku}: no se publica 0 a ciegas.`
+          : `CT no reporta el almacén ${almacen} para la clave ${mapeo.ctSku}. ` +
+            `Puede ser clave inexistente o almacén equivocado: no se publica 0 a ciegas.`,
       };
     }
 

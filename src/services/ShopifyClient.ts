@@ -241,6 +241,32 @@ export class ShopifyClient {
     return { productId: nodo.id, variantId: variante.id, inventoryItemId: variante.inventoryItem.id };
   }
 
+  /**
+   * "Seguir vendiendo cuando no hay existencias" (CONTINUE) o no (DENY).
+   * Con CONTINUE el producto nunca aparece agotado.
+   */
+  async fijarPoliticaInventario(
+    productId: string, variantId: string, politica: "CONTINUE" | "DENY"
+  ): Promise<void> {
+    const gid = variantId.startsWith("gid://")
+      ? variantId
+      : `gid://shopify/ProductVariant/${variantId}`;
+    const datos = await this.consultar<{ productVariantsBulkUpdate: { userErrors: ErrorUsuario[] } }>(
+      `mutation politica($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+         productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+           userErrors { field message }
+         }
+       }`,
+      { productId, variants: [{ id: gid, inventoryPolicy: politica }] }
+    );
+    const errores = datos.productVariantsBulkUpdate.userErrors;
+    if (errores?.length) {
+      throw new ErrorShopify(
+        "Shopify rechazó la política de inventario: " + errores.map((e) => e.message).join("; "), errores
+      );
+    }
+  }
+
   /** Precio de venta y costo de una variante; no toca título ni descripción. */
   async actualizarPrecio(productId: string, variantId: string, precio: number, costo: number): Promise<void> {
     const gid = variantId.startsWith("gid://")

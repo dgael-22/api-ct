@@ -153,6 +153,37 @@ test("detención 1: sin mapeo queda 'blocked' con motivo, y se reintenta al conf
   assert.equal(reintento.registro.status, "accepted");
 });
 
+// ---------------------------------------------------------- existencias ---
+
+test("con CT_EXISTENCIA_TOTAL se publica la suma de todos los almacenes", async () => {
+  const antesTotal = process.env.CT_EXISTENCIA_TOTAL;
+  const antesMargen = process.env.CT_MARGEN_SEGURIDAD;
+  try {
+    const ct = new CtSimulado("ok");
+    const servicio = new InventorySyncService(ct, shopify, new RepoFalso<any>() as any);
+    const porAlmacen = (await ct.existenciaPorAlmacen("CT-1"))["01A"].existencia;
+    const total = (await ct.existenciaTotal("CT-1")).existencia_total;
+    assert.ok(total > porAlmacen, "el simulado reparte existencia entre almacenes");
+
+    process.env.CT_EXISTENCIA_TOTAL = "false";
+    assert.equal(await servicio.existenciaDeCt("CT-1", "01A"), porAlmacen);
+    process.env.CT_EXISTENCIA_TOTAL = "true";
+    assert.equal(await servicio.existenciaDeCt("CT-1", "01A"), total);
+
+    // El margen de seguridad ya no está fijo en 1.
+    process.env.CT_MARGEN_SEGURIDAD = "0";
+    assert.equal(servicio.calcularPublicable(3), 3);
+    process.env.CT_MARGEN_SEGURIDAD = "2";
+    assert.equal(servicio.calcularPublicable(3), 1);
+    assert.equal(servicio.calcularPublicable(1), 0, "nunca negativo");
+  } finally {
+    if (antesTotal === undefined) delete process.env.CT_EXISTENCIA_TOTAL;
+    else process.env.CT_EXISTENCIA_TOTAL = antesTotal;
+    if (antesMargen === undefined) delete process.env.CT_MARGEN_SEGURIDAD;
+    else process.env.CT_MARGEN_SEGURIDAD = antesMargen;
+  }
+});
+
 // --------------------------------------------------------------- envío ---
 
 test("sin datos completos de envío la orden se detiene y no llega a CT", async () => {

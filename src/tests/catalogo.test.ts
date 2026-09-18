@@ -117,6 +117,27 @@ const producto = normalizarProductoCt({
   imagen: "https://a.com/l.png",
 }) as ProductoCt;
 
+test("con SHOPIFY_VENDER_SIN_STOCK el producto nuevo nunca aparece agotado", async () => {
+  const anterior = process.env.SHOPIFY_VENDER_SIN_STOCK;
+  try {
+    const shopify = shopifyFalso();
+    process.env.SHOPIFY_VENDER_SIN_STOCK = "true";
+    await new ImportadorCt(new CtSimulado("ok"), shopify.cliente, new RepoFalso() as any)
+      .importar([producto], { aplicar: true, reglas });
+    const entrada = shopify.de("guardarProducto")[0].args[0] as any;
+    assert.equal(entrada.variants[0].inventoryPolicy, "CONTINUE");
+
+    const otro = shopifyFalso();
+    process.env.SHOPIFY_VENDER_SIN_STOCK = "false";
+    await new ImportadorCt(new CtSimulado("ok"), otro.cliente, new RepoFalso() as any)
+      .importar([producto], { aplicar: true, reglas });
+    assert.equal((otro.de("guardarProducto")[0].args[0] as any).variants[0].inventoryPolicy, "DENY");
+  } finally {
+    if (anterior === undefined) delete process.env.SHOPIFY_VENDER_SIN_STOCK;
+    else process.env.SHOPIFY_VENDER_SIN_STOCK = anterior;
+  }
+});
+
 test("importar en simulación no escribe nada", async () => {
   const shopify = shopifyFalso();
   const repo = new RepoFalso();

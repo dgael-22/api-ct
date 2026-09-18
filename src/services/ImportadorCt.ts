@@ -30,7 +30,7 @@ import {
   descripcionHtml, handleCt, precioVenta, ProductoCt, ReglasPrecio, reglasPrecio, tagsCt,
 } from "./catalogoCt";
 import { ClienteCt, ErrorCt } from "./CtClient";
-import { MARGEN_SEGURIDAD } from "./InventorySyncService";
+import { margenSeguridad } from "./InventorySyncService";
 import { ShopifyClient } from "./ShopifyClient";
 
 export const CONFIRMADO_POR = "importacion-ct";
@@ -116,7 +116,7 @@ export class ImportadorCt {
     const moneda = String(detalle.moneda ?? "").toUpperCase();
     const venta = precioVenta(costo, moneda, Number(detalle.tipoCambio) || null, reglas);
     const existencia = Math.max(0, Number(detalle.existencia) || 0);
-    const publicada = Math.max(0, existencia - MARGEN_SEGURIDAD);
+    const publicada = Math.max(0, existencia - margenSeguridad());
     const conPrecio = { ...base, costo, moneda, precioVenta: venta, existencia, cantidadPublicada: publicada };
 
     if (venta === null) {
@@ -167,6 +167,8 @@ export class ImportadorCt {
       variants: [{
         optionValues: [{ optionName: "Title", name: "Default Title" }],
         price: precio.toFixed(2),
+        // CONTINUE = se sigue vendiendo en cero (SHOPIFY_VENDER_SIN_STOCK).
+        inventoryPolicy: env.shopify.venderSinStock ? "CONTINUE" : "DENY",
         barcode: p.codigoBarras ?? undefined,
         inventoryItem: { sku: p.clave, tracked: true, cost: costo.toFixed(2) },
       }],
