@@ -21,6 +21,7 @@
     "ct:importar": "tsx src/scripts/importarCatalogoCt.ts",
     "shopify:locations": "tsx src/scripts/shopifyLocations.ts",
     "shopify:catalogo": "tsx src/scripts/shopifyCatalogo.ts",
+    "shopify:direcciones": "tsx src/scripts/shopifyDirecciones.ts",
     "shopify:webhook": "tsx src/scripts/shopifyWebhook.ts",
     "shopify:colecciones": "tsx src/scripts/shopifyColecciones.ts",
     "shopify:menu": "tsx src/scripts/shopifyMenu.ts",
