@@ -66,7 +66,11 @@ export function extraerOrden(payload: any): OrdenShopify {
  * "colonia" ni "entre calles". Mientras el checkout no capture la colonia:
  *   · calle y noExterior ← "Av. Juárez 1250" se parte en nombre y número
  *   · noInterior   ← la segunda línea si dice interior, depto, piso o casa
- *   · colonia      ← "Empresa", o la segunda línea si no es un interior
+ *   · colonia      ← la segunda línea; "Empresa" sólo si esa línea es interior
+ *
+ * El orden importa: en las órdenes reales de SCHU la colonia SIEMPRE viene en
+ * la segunda línea ("Centro", "FRACC CUMBRES DEL DEPORTE") y "Empresa" trae la
+ * empresa del cliente ("IMSS"), que no es una colonia.
  *   · entreCalles y lo que falte de interior ← CT_RELLENO_ENVIO ("S/N")
  * Lo que de plano falte lo detiene OrderService con "envio_incompleto": es
  * mejor avisar que mandar a CT una dirección que no puede surtir.
@@ -89,8 +93,8 @@ export function direccionDeEnvio(payload: any): EnvioCt | undefined {
   const linea2EsExterior = !esInterior && /\d/.test(linea2) && !conNumero;
   const noExterior = conNumero?.[2] ?? (linea2EsExterior ? linea2 : "");
   const noInterior = esInterior ? linea2 : relleno;
-  const colonia = String(d.company ?? "").trim() ||
-    (esInterior || linea2EsExterior ? "" : linea2);
+  const colonia = (esInterior || linea2EsExterior ? "" : linea2) ||
+    String(d.company ?? "").trim();
 
   return {
     nombre: [d.first_name, d.last_name].filter(Boolean).join(" ").trim(),

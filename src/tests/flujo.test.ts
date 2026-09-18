@@ -195,6 +195,29 @@ test("la dirección de Shopify se traduce a los campos de CT, sin dejar vacíos"
   assert.equal(conEmpresa?.entreCalles, "S/N");
   assert.deepEqual(camposFaltantesDeEnvio(conEmpresa), []);
 
+  // Como llegan las órdenes reales de SCHU: colonia en la segunda línea y la
+  // empresa del cliente en "Empresa" (que NO es una colonia).
+  const conEmpresaReal = direccionDeEnvio({
+    shipping_address: {
+      first_name: "Jorge", last_name: "Muñoz", address1: "C MANUEL GALLEGOS 1628",
+      address2: "FRACC CUMBRES DEL DEPORTE", company: "IMSS",
+      city: "DELICIAS", province: "CHH", zip: "33085", phone: "+52 639 135 0793",
+    },
+  });
+  assert.equal(conEmpresaReal?.direccion, "C MANUEL GALLEGOS");
+  assert.equal(conEmpresaReal?.noExterior, "1628");
+  assert.equal(conEmpresaReal?.colonia, "FRACC CUMBRES DEL DEPORTE", "la empresa no es la colonia");
+  assert.deepEqual(camposFaltantesDeEnvio(conEmpresaReal), []);
+
+  // Sin teléfono, CT no puede generar la guía: se detiene.
+  const sinTelefono = direccionDeEnvio({
+    shipping_address: {
+      first_name: "Ana", address1: "Juarez #21", address2: "Centro",
+      city: "Tezontepec de aldama", province: "HID", zip: "42760",
+    },
+  });
+  assert.deepEqual(camposFaltantesDeEnvio(sinTelefono), ["telefono"]);
+
   // Sin "Empresa": la colonia sale de la segunda línea y el número, de la primera.
   const sinEmpresa = direccionDeEnvio({
     shipping_address: {

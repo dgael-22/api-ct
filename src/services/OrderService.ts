@@ -59,7 +59,7 @@ export const CAMPOS_ENVIO: (keyof EnvioCt)[] = [
 ];
 
 export function camposFaltantesDeEnvio(envio: EnvioCt | undefined): string[] {
-  if (!envio) return ["la orden no trae dirección de envío"];
+  if (!envio) return ["la orden no trae dirección de envío (¿recoger en tienda o producto digital?)"];
   return CAMPOS_ENVIO.filter((campo) => {
     const valor = envio[campo];
     return typeof valor === "number" ? !(valor > 0) : !String(valor ?? "").trim();
