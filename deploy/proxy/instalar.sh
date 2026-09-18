@@ -3,6 +3,14 @@
 #
 #   CLAVE_PROXY=<clave larga> bash instalar.sh
 #
+# ENSAYO en una VM (VMware/VirtualBox), sin pagar nada:
+#
+#   MODO_PRUEBA=1 CLAVE_PROXY=<clave larga> bash instalar.sh
+#
+# En ese modo el certificado lo emite el propio Caddy (Let's Encrypt no puede
+# validar una IP privada), se omite el agente de DigitalOcean y el nombre sale
+# de la IP local de la VM. Todo lo demás es idéntico al servidor real.
+#
 # Idempotente: correrlo otra vez sólo actualiza la configuración.
 set -euo pipefail
 
@@ -15,9 +23,19 @@ if [[ ! "$CLAVE_PROXY" =~ ^[A-Za-z0-9]+$ ]]; then
 fi
 DIR="$(cd "$(dirname "$0")" && pwd)"
 
+PRUEBA="${MODO_PRUEBA:-0}"
+
 # La IP con la que este servidor sale a internet: la que se le da a CT.
 IP="$(curl -4 -fsS https://ifconfig.me)"
-DOMINIO="${DOMINIO:-${IP//./-}.sslip.io}"
+if [[ "$PRUEBA" == "1" ]]; then
+  # En la VM el nombre apunta a su IP local (sslip.io también resuelve privadas).
+  IP_LOCAL="$(hostname -I | awk '{print $1}')"
+  DOMINIO="${DOMINIO:-${IP_LOCAL//./-}.sslip.io}"
+  TLS="tls internal"
+else
+  DOMINIO="${DOMINIO:-${IP//./-}.sslip.io}"
+  TLS=""
+fi
 
 echo "==> Actualizaciones de seguridad automáticas"
 export DEBIAN_FRONTEND=noninteractive
@@ -43,7 +61,9 @@ echo "==> fail2ban: bloquea IPs que insisten en SSH"
 systemctl enable --now fail2ban
 
 echo "==> Agente de métricas de DigitalOcean (gráficas y alertas en el panel)"
-if ! systemctl is-active --quiet do-agent; then
+if [[ "$PRUEBA" == "1" ]]; then
+  echo "   (ensayo en VM: se omite)"
+elif ! systemctl is-active --quiet do-agent; then
   if ! curl -fsSL https://repos.insights.digitalocean.com/install.sh | bash; then
     echo "   (no se pudo instalar do-agent; no afecta al proxy)"
   fi
@@ -69,7 +89,7 @@ echo "==> Configuración del proxy"
 mkdir -p /var/log/caddy
 chown caddy:caddy /var/log/caddy
 sed -e "s/__DOMINIO__/${DOMINIO}/" -e "s/__CLAVE_PROXY__/${CLAVE_PROXY}/" \
-  "$DIR/Caddyfile" > /etc/caddy/Caddyfile
+  -e "s/__TLS__/${TLS}/" "$DIR/Caddyfile" > /etc/caddy/Caddyfile
 chown root:caddy /etc/caddy/Caddyfile
 chmod 640 /etc/caddy/Caddyfile
 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
@@ -78,6 +98,18 @@ systemctl reload-or-restart caddy
 
 echo
 echo "Listo."
-echo "  IP para CT:        ${IP}"
-echo "  CT_BASE_URL:       https://${DOMINIO}"
-echo "  Salud del proxy:   https://${DOMINIO}/__proxy/salud"
+if [[ "$PRUEBA" == "1" ]]; then
+  echo "  ENSAYO EN VM — el certificado es propio, así que curl necesita -k."
+  echo "  Proxy:             https://${DOMINIO}   (IP local ${IP_LOCAL})"
+  echo "  Salida a internet: ${IP}   <- ésta vería CT si se usara de verdad"
+  echo
+  echo "  Compruébalo aquí mismo:"
+  echo "    curl -k https://${DOMINIO}/__proxy/salud                 # ok"
+  echo "    curl -k -i https://${DOMINIO}/pedido/listar              # 403: sin clave no pasa"
+  echo "    curl -k -i -H \"X-Proxy-Key: \$CLAVE_PROXY\" https://${DOMINIO}/pedido/listar"
+  echo "                                                            # responde CT (401 sin token)"
+else
+  echo "  IP para CT:        ${IP}"
+  echo "  CT_BASE_URL:       https://${DOMINIO}"
+  echo "  Salud del proxy:   https://${DOMINIO}/__proxy/salud"
+fi

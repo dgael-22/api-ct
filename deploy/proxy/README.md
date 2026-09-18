@@ -58,6 +58,30 @@ curl -i -H "X-Proxy-Key: LA_CLAVE" https://IP-CON-GUIONES.sslip.io/pedido/listar
 # responde CT (401 mientras no haya token): el proxy sí reenvía
 ```
 
+## Ensayo en una VM antes de pagar
+
+Se puede montar todo en una máquina virtual (VMware, VirtualBox, Hyper-V) para
+comprobar el script sin contratar nada:
+
+1. VM con **Ubuntu Server 24.04**, 1 vCPU y 1 GB de RAM, red en NAT o puente.
+2. Copia la carpeta `deploy/proxy` a la VM (o clona el repo dentro).
+3. Corre, dentro de la VM:
+
+   ```bash
+   sudo MODO_PRUEBA=1 CLAVE_PROXY=<clave larga> bash deploy/proxy/instalar.sh
+   ```
+
+4. Al terminar imprime los tres comandos para comprobarlo ahí mismo: salud,
+   403 sin clave y reenvío a CT con la clave.
+
+En ese modo el certificado lo emite Caddy (por eso `curl -k`), se omite el
+agente de DigitalOcean y el nombre sale de la IP local. Todo lo demás —firewall,
+fail2ban, SSH sólo con llave, la clave del proxy— es idéntico al servidor real.
+
+**Lo que el ensayo NO prueba:** la IP fija. La VM sale a internet con la IP de
+tu casa u oficina, que normalmente cambia sola. Para CT hace falta una IP que
+no cambie: el Droplet, o el internet de la oficina si el proveedor da IP fija.
+
 ## Seguridad
 
 DigitalOcean **por defecto** sólo da: red con protección DDoS básica, la llave

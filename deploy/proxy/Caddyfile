@@ -4,9 +4,13 @@
 # IP fija. La API llama aquí con la cabecera X-Proxy-Key; Caddy la valida, la
 # quita y reenvía la petición a CT, que la ve llegar desde la IP de este Droplet.
 #
-# instalar.sh reemplaza __DOMINIO__ y __CLAVE_PROXY__ al copiarlo a /etc/caddy.
+# instalar.sh reemplaza __DOMINIO__, __CLAVE_PROXY__ y __TLS__ al copiarlo a
+# /etc/caddy. __TLS__ queda vacío en un servidor real (certificado de Let's
+# Encrypt) y es `tls internal` en el ensayo dentro de una VM, donde no hay
+# IP pública que Let's Encrypt pueda validar.
 
 __DOMINIO__ {
+	__TLS__
 	# Los handle son excluyentes: primero la ruta exacta, luego el de la
 	# cabecera y al final el que no tiene condición.
 
